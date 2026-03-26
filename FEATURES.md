@@ -18,9 +18,20 @@ This app is for individual learners who want a structured, daily study workflow 
 - Present clear tasks for the day, such as reading a topic, completing a quiz, reviewing flashcards, or taking part of a mock exam
 - Track which daily tasks are complete, in progress, or still pending
 - Carry unfinished tasks into the next day when appropriate
+- Allow users to pull and work on tasks from future days for self-paced flexibility
 - Give the user a quick summary of what to study today and why it was recommended
 
-### 2. Exam Topic Structure
+### 2. Preparation Timeline & Goals Setup
+
+- Allow users to define their target exam date or total preparation time (e.g., 2 weeks, 4 weeks, 8 weeks)
+- Let users specify their daily study commitment in hours (e.g., 1 hour, 2 hours, 4 hours per day)
+- Calculate total available study hours based on selected timeline and daily commitment
+- Provide an evaluation assessment of the preparation plan (e.g., "2 weeks with 2 hours/day = below recommended", "4 weeks with 3 hours/day = good preparation")
+- Adjust the daily study plan based on the timeline and daily hours to ensure realistic task distribution
+- Allow users to update their preparation goals and timeline at any time
+- Show progress toward their deadline and whether they're on track to complete preparation
+
+### 4. Exam Topic Structure
 
 - Organize learning content by AWS SAA-C03 exam domains and topics
 - Let users browse topics in a structured curriculum
@@ -33,8 +44,14 @@ This app is for individual learners who want a structured, daily study workflow 
 - Include practical explanations for core AWS concepts and services
 - Add curated links to useful external resources such as AWS documentation, videos, and articles
 - Keep all important learning materials accessible from within the app
+- Recommend high-quality external courses (e.g., Udemy, A Cloud Guru, Linux Academy, etc.) with links and descriptions
+- Include information about paid practice test platforms (e.g., Whizlabs, TutorialsDojo, Examtopics)
+- Provide guidance on which external resources align with each exam domain and topic
+- Display whether resources are free or paid and provide purchasing links where applicable
+- Allow users to track which external courses and tests they've purchased or completed
+- Include AWS official resources, study guides, and AWS training recommendations
 
-### 4. Practice Quizzes
+### 5. Practice Quizzes
 
 - Offer quizzes for individual topics and domains
 - Show instant feedback after answering each question or after quiz completion
@@ -42,21 +59,21 @@ This app is for individual learners who want a structured, daily study workflow 
 - Track user performance for every quiz
 - Allow repeated practice to improve weak areas
 
-### 5. Full Mock Exams
+### 6. Full Mock Exams
 
 - Include full-length mock exams that simulate the real certification experience
 - Support timed exam sessions
 - Show overall score and domain-level performance after completion
 - Let users review all questions and explanations after finishing a mock exam
 
-### 6. Flashcards and Smart Review
+### 7. Flashcards and Smart Review
 
 - Provide flashcards for important AWS concepts, services, best practices, and common exam traps
 - Support spaced repetition for long-term retention
 - Schedule reviews automatically based on user performance
 - Recommend review sessions for previously learned topics
 
-### 7. Progress Tracking
+### 8. Progress Tracking
 
 - Show overall exam preparation progress
 - Track completion by topic and by exam domain
@@ -65,25 +82,35 @@ This app is for individual learners who want a structured, daily study workflow 
 - Track study time and completed study sessions
 - Show study history in a calendar-style view
 
-### 8. Readiness Score
+### 9. Readiness Score
 
 - Show a readiness or confidence score that reflects how prepared the user is for the exam
 - Base the score on quiz results, mock exam performance, topic completion, and review consistency
 - Help users understand whether they are improving and which areas still need work
 
-### 9. Weak-Area Recommendations
+### 10. Weak-Area Recommendations
 
 - Detect weak topics based on quiz and mock exam performance
 - Recommend what to study next based on mistakes and incomplete areas
 - Use the weak-area data to improve the daily plan
 - Prioritize review and practice where the user needs the most improvement
 
-### 10. Streaks and Motivation
+### 11. Streaks and Motivation
 
 - Track daily study streaks
 - Show milestone progress such as number of completed quizzes, finished topics, or study days
 - Award badges for important achievements
 - Use light gamification to encourage daily consistency without overcomplicating the app
+
+### 12. User Authentication and Authorization
+
+- Allow users to create secure accounts with email and password
+- Support secure login with session management
+- Protect user data with proper access controls
+- Enable users to update their account information and change passwords
+- Restrict access to learning content and progress data to authenticated users only
+- Support password reset functionality for account recovery
+- Implement role-based access control if needed for future admin or instructor features
 
 ## Similar-App Inspired Features
 
