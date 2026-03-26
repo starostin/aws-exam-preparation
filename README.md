@@ -56,12 +56,12 @@ Create the file:
 cp apps/api/.env.local.example apps/api/.env.local
 ```
 
-### 3.2 Frontend (`apps/web/.env.local`)
+### 3.2 Frontend (`apps/web/.env`)
 
 Create the file:
 
 ```bash
-cp apps/web/.env.local.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env
 ```
 
 **Where to find Supabase credentials:**
