@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, type AuthUser } from '../../common/decorators/current-user.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { UpdateProfileDto } from './update-profile.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersService, type UserProfile } from './users.service';
 
 @Controller({ path: 'users', version: '1' })

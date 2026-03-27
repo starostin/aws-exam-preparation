@@ -47,7 +47,7 @@ var database_module_1 = require("./modules/database/database.module");
 var auth_module_1 = require("./modules/auth/auth.module");
 var users_module_1 = require("./modules/users/users.module");
 var study_plans_module_1 = require("./modules/study-plans/study-plans.module");
-var topics_module_1 = require("./modules/topics/topics.module");
+var materials_module_1 = require("./modules/materials/materials.module");
 var quizzes_module_1 = require("./modules/quizzes/quizzes.module");
 var mock_exams_module_1 = require("./modules/mock-exams/mock-exams.module");
 var flashcards_module_1 = require("./modules/flashcards/flashcards.module");
@@ -63,7 +63,7 @@ var AppModule = function () {
                 auth_module_1.AuthModule,
                 users_module_1.UsersModule,
                 study_plans_module_1.StudyPlansModule,
-                topics_module_1.TopicsModule,
+                materials_module_1.MaterialsModule,
                 quizzes_module_1.QuizzesModule,
                 mock_exams_module_1.MockExamsModule,
                 flashcards_module_1.FlashcardsModule,

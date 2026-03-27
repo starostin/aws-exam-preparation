@@ -3,8 +3,8 @@ import { CurrentUser, type AuthUser } from '../../common/decorators/current-user
 import { UsersService } from '../users/users.service';
 import { AuthGuard } from './auth.guard';
 import { AuthService, type AuthResponse } from './auth.service';
-import { LoginDto } from './dtos/login.dto';
-import { RegisterDto } from './dtos/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import type { UserProfile } from '../users/users.service';
 
 @Controller({ path: 'auth', version: '1' })

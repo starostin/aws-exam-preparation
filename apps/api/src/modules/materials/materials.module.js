@@ -38,26 +38,26 @@ var __setFunctionName = (this && this.__setFunctionName) || function (f, name, p
     return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TopicsModule = void 0;
+exports.MaterialsModule = void 0;
 var common_1 = require("@nestjs/common");
-var TopicsModule = function () {
+var MaterialsModule = function () {
     var _classDecorators = [(0, common_1.Module)({})];
     var _classDescriptor;
     var _classExtraInitializers = [];
     var _classThis;
-    var TopicsModule = _classThis = /** @class */ (function () {
-        function TopicsModule_1() {
+    var MaterialsModule = _classThis = /** @class */ (function () {
+        function MaterialsModule_1() {
         }
-        return TopicsModule_1;
+        return MaterialsModule_1;
     }());
-    __setFunctionName(_classThis, "TopicsModule");
+    __setFunctionName(_classThis, "MaterialsModule");
     (function () {
         var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
         __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
-        TopicsModule = _classThis = _classDescriptor.value;
+        MaterialsModule = _classThis = _classDescriptor.value;
         if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         __runInitializers(_classThis, _classExtraInitializers);
     })();
-    return TopicsModule = _classThis;
+    return MaterialsModule = _classThis;
 }();
-exports.TopicsModule = TopicsModule;
+exports.MaterialsModule = MaterialsModule;

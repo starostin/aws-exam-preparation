@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppShell } from '@/components/shared/app-shell';
 
 export const metadata: Metadata = {
   title: "AWS Exam Preparation",
@@ -12,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, minHeight: '100dvh' }}>{children}</body>
+      <body style={{ margin: 0, minHeight: '100dvh' }}>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

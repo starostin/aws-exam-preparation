@@ -8,8 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createClient, type AuthError, type Session, type User } from '@supabase/supabase-js';
 import { UsersService } from '../users/users.service';
-import { LoginDto } from './dtos/login.dto';
-import { RegisterDto } from './dtos/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 export interface AuthResponse {
   user: {

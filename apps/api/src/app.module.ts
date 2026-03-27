@@ -6,7 +6,7 @@ import { DatabaseModule } from './modules/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { StudyPlansModule } from './modules/study-plans/study-plans.module';
-import { TopicsModule } from './modules/topics/topics.module';
+import { MaterialsModule } from './modules/materials/materials.module';
 import { QuizzesModule } from './modules/quizzes/quizzes.module';
 import { MockExamsModule } from './modules/mock-exams/mock-exams.module';
 import { FlashcardsModule } from './modules/flashcards/flashcards.module';
@@ -15,6 +15,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
 import { GamificationModule } from './modules/gamification/gamification.module';
 
 @Module({
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig], cache: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
@@ -22,7 +23,7 @@ import { GamificationModule } from './modules/gamification/gamification.module';
     AuthModule,
     UsersModule,
     StudyPlansModule,
-    TopicsModule,
+    MaterialsModule,
     QuizzesModule,
     MockExamsModule,
     FlashcardsModule,

@@ -198,10 +198,14 @@ export const externalResources = pgTable('external_resources', {
   certificationId: uuid('certification_id').references(() => certifications.id),
   topicId: uuid('topic_id').references(() => topics.id),
   title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
   url: text('url').notNull(),
   type: varchar('type', { length: 50 }).notNull(), // course | docs | video | practice_test
   isFree: boolean('is_free').notNull().default(true),
   provider: varchar('provider', { length: 100 }),
+  level: varchar('level', { length: 30 }), // beginner | intermediate | advanced | mixed
+  tags: jsonb('tags').$type<string[]>().notNull(),
+  estimatedMinutes: integer('estimated_minutes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

@@ -11,6 +11,7 @@
 - Keep files small and focused by feature/module.
 - Prefer composition over deep inheritance.
 - Enforce clear naming for services, DTOs, and hooks.
+- In the API (`apps/api`), keep every DTO in a module-local `dto/` folder (for example, `modules/users/dto/update-profile.dto.ts`).
 
 ## API and Data Conventions
 
