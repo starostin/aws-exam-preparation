@@ -25,11 +25,11 @@ export class SupabaseStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     this.supabase = createClient(
       config.getOrThrow<string>('app.SUPABASE_URL'),
-      config.getOrThrow<string>('app.SUPABASE_SERVICE_ROLE_KEY'),
+      config.getOrThrow<string>('app.SUPABASE_SECRET_KEY'),
     );
   }
 
-  async validate(payload: SupabaseJwtPayload): Promise<{ id: string; email: string }> {
+  validate(payload: SupabaseJwtPayload): { id: string; email: string } {
     if (!payload.sub) {
       throw new UnauthorizedException('Invalid token payload');
     }
