@@ -3,7 +3,14 @@ import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../../database/schema';
-import { MaterialsQueryDto } from './dto/materials-query.dto';
+
+type MaterialsQuery = {
+  certificationId?: string;
+  type?: 'docs' | 'video' | 'course' | 'practice_test';
+  isFree?: boolean;
+  provider?: string;
+  search?: string;
+};
 
 export interface StudyMaterialItem {
   id: string;
@@ -11,6 +18,7 @@ export interface StudyMaterialItem {
   description: string | null;
   url: string;
   type: string;
+  priority: number;
   isFree: boolean;
   provider: string | null;
   level: string | null;
@@ -27,8 +35,13 @@ export class MaterialsService {
     private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
-  async listStudyMaterials(query: MaterialsQueryDto): Promise<StudyMaterialItem[]> {
-    const conditions = [eq(schema.certifications.code, 'SAA-C03')];
+  async listStudyMaterials(query: MaterialsQuery): Promise<StudyMaterialItem[]> {
+    const certificationId = query.certificationId;
+    const conditions = [
+      certificationId
+        ? eq(schema.certifications.id, certificationId)
+        : eq(schema.certifications.code, 'SAA-C03'),
+    ];
 
     if (query.type) {
       conditions.push(eq(schema.externalResources.type, query.type));
@@ -60,6 +73,7 @@ export class MaterialsService {
         description: schema.externalResources.description,
         url: schema.externalResources.url,
         type: schema.externalResources.type,
+        priority: schema.externalResources.priority,
         isFree: schema.externalResources.isFree,
         provider: schema.externalResources.provider,
         level: schema.externalResources.level,
@@ -76,7 +90,12 @@ export class MaterialsService {
       .leftJoin(schema.topics, eq(schema.externalResources.topicId, schema.topics.id))
       .leftJoin(schema.domains, eq(schema.topics.domainId, schema.domains.id))
       .where(and(...conditions))
-      .orderBy(desc(schema.externalResources.isFree), schema.externalResources.type, schema.externalResources.title);
+      .orderBy(
+        desc(schema.externalResources.priority),
+        desc(schema.externalResources.isFree),
+        schema.externalResources.type,
+        schema.externalResources.title,
+      );
 
     return rows.map((row) => ({
       ...row,

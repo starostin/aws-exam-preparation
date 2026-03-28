@@ -2,9 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BookOpen, CalendarClock, ClipboardList, LayoutDashboard, LogOut, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { signOutCurrentUser } from '@/lib/auth/auth-service';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
+import { ThemeSwitcher } from './theme-switcher';
 
 interface AppShellProps {
   children: ReactNode;
@@ -69,164 +75,122 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   if (loadingUser) {
-    return <main style={styles.page}>Loading...</main>;
+    return (
+      <main className='grid min-h-screen place-items-center bg-background text-muted-foreground'>
+        Loading your dashboard...
+      </main>
+    );
   }
 
+  const navItems: Array<{ href: '/' | '/study-plans' | '/materials'; label: string; icon: LucideIcon }> = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/study-plans', label: 'Study Plans', icon: ClipboardList },
+    { href: '/materials', label: 'Study Materials', icon: BookOpen },
+  ];
+
   return (
-    <main style={styles.page}>
-      <div style={styles.shell}>
-        <header style={styles.header}>
-          <div>
-            <h1 style={styles.title}>AWS Exam Preparation</h1>
-            <p style={styles.subtitle}>Structured path for SAA-C03 success</p>
+    <main className='relative min-h-screen overflow-hidden px-4 py-4 sm:px-6 sm:py-6'>
+      <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(6,182,212,0.12),transparent_35%),radial-gradient(circle_at_85%_15%,rgba(59,130,246,0.14),transparent_35%)] dark:bg-[radial-gradient(circle_at_15%_15%,rgba(19,164,181,0.16),transparent_35%),radial-gradient(circle_at_85%_15%,rgba(24,64,160,0.2),transparent_35%)]' />
+
+      <div className='relative mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1600px] overflow-hidden rounded-3xl border border-border/70 bg-card/75 backdrop-blur-sm animate-rise-in'>
+        <aside className='hidden w-72 flex-col border-r border-border/70 bg-card/90 p-5 lg:flex'>
+          <div className='mb-10'>
+            <p className='text-xs uppercase tracking-[0.2em] text-cyan-300/80'>AWS Focus Mode</p>
+            <h1 className='mt-2 text-2xl font-semibold text-foreground'>Exam Preparation</h1>
+            <p className='mt-2 text-sm text-muted-foreground'>Structure your learning sprint with a calm and consistent rhythm.</p>
           </div>
 
-          <div style={styles.headerRight}>
-            <span style={styles.emailLabel}>{email ?? 'No user email found'}</span>
-            <button type='button' onClick={() => { void handleSignOut(); }} style={styles.button}>
-              Sign out
-            </button>
+          <nav className='space-y-2'>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all',
+                    isActive
+                      ? 'border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
+                      : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <Icon className='h-4 w-4' />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+
+            <div className='mt-4 space-y-2 rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground'>
+              <p className='font-medium text-foreground'>Coming Next</p>
+              <p>Quizzes</p>
+              <p>Mock Exams</p>
+              <p>Progress</p>
+            </div>
+          </nav>
+
+          <div className='mt-auto rounded-xl border border-border bg-background/60 p-4'>
+            <p className='text-xs uppercase tracking-widest text-muted-foreground'>Signed in as</p>
+            <p className='mt-1 truncate text-sm text-foreground'>{email ?? 'No user email found'}</p>
           </div>
-        </header>
+        </aside>
 
-        <div style={styles.layout}>
-          <aside style={styles.sidebar}>
-            <p style={styles.sidebarTitle}>Navigation</p>
-            <Link href='/' style={pathname === '/' ? styles.sidebarLinkActive : styles.sidebarLink}>
-              Dashboard
-            </Link>
-            <Link
-              href='/materials'
-              style={pathname.startsWith('/materials') ? styles.sidebarLinkActive : styles.sidebarLink}
-            >
-              Study Materials
-            </Link>
-            <span style={styles.sidebarLinkMuted}>Study Plans (coming soon)</span>
-            <span style={styles.sidebarLinkMuted}>Quizzes (coming soon)</span>
-            <span style={styles.sidebarLinkMuted}>Mock Exams (coming soon)</span>
-            <span style={styles.sidebarLinkMuted}>Progress (coming soon)</span>
-          </aside>
+        <div className='flex min-w-0 flex-1 flex-col'>
+          <header className='border-b border-border/70 bg-card/70 px-4 py-4 sm:px-6'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+              <div className='flex items-center gap-3'>
+                <Badge className='border-cyan-400/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'>
+                  <Sparkles className='mr-1 h-3.5 w-3.5' />
+                  Focus Session
+                </Badge>
+                <Badge variant='secondary'>
+                  <CalendarClock className='mr-1 h-3.5 w-3.5' />
+                  Daily plan
+                </Badge>
+              </div>
 
-          <section style={styles.content}>{children}</section>
-        </div>
+              <div className='flex items-center gap-2'>
+                <ThemeSwitcher />
+                <span className='hidden max-w-52 truncate text-sm text-muted-foreground sm:inline'>{email ?? 'No user email found'}</span>
+                <Button
+                  type='button'
+                  variant='outline'
+                  className='border-border bg-background/70 text-foreground hover:bg-muted'
+                  onClick={() => {
+                    void handleSignOut();
+                  }}
+                >
+                  <LogOut className='h-4 w-4' />
+                  Sign out
+                </Button>
+              </div>
+            </div>
 
-        {error ? <p style={styles.error}>{error}</p> : null}
+            <nav className='mt-4 flex gap-2 lg:hidden'>
+              {navItems.map((item) => {
+                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-sm font-medium',
+                      isActive ? 'bg-cyan-500/20 text-cyan-800 dark:text-cyan-200' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </header>
+
+          <section className='flex-1 overflow-auto px-4 py-5 sm:px-6'>{children}</section>
+
+          {error ? <p className='border-t border-border/70 px-6 py-3 text-sm text-destructive'>{error}</p> : null}
+          </div>
       </div>
     </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: '100dvh',
-    padding: '1.25rem',
-    boxSizing: 'border-box',
-    background: 'linear-gradient(120deg, #f8fbff 0%, #ebf3ff 48%, #fdf5e8 100%)',
-    fontFamily: 'ui-rounded, system-ui, sans-serif',
-  },
-  shell: {
-    width: 'min(100%, 1260px)',
-    margin: '0 auto',
-    background: '#fff',
-    border: '1px solid #d2dfef',
-    borderRadius: '16px',
-    boxShadow: '0 18px 45px rgba(8, 36, 84, 0.12)',
-    overflow: 'hidden',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '1rem',
-    flexWrap: 'wrap',
-    padding: '1.25rem 1.5rem',
-    borderBottom: '1px solid #dbe6f4',
-    backgroundColor: '#f6faff',
-  },
-  title: {
-    margin: 0,
-    color: '#133869',
-    fontSize: '1.55rem',
-  },
-  subtitle: {
-    margin: '0.25rem 0 0',
-    color: '#2b466f',
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-  },
-  emailLabel: {
-    color: '#0f355f',
-    fontWeight: 600,
-    backgroundColor: '#e7f0fb',
-    border: '1px solid #c8dbf3',
-    padding: '0.4rem 0.6rem',
-    borderRadius: '999px',
-  },
-  button: {
-    border: '1px solid #9ab4d5',
-    borderRadius: '999px',
-    background: '#f3f8ff',
-    color: '#123e77',
-    padding: '0.45rem 0.8rem',
-    cursor: 'pointer',
-  },
-  layout: {
-    display: 'grid',
-    gridTemplateColumns: '240px 1fr',
-    height: 'calc(100dvh - 196px)',
-  },
-  sidebar: {
-    borderRight: '1px solid #dbe6f4',
-    backgroundColor: '#fbfdff',
-    padding: '1.1rem',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.55rem',
-  },
-  sidebarTitle: {
-    margin: '0 0 0.35rem',
-    fontSize: '0.86rem',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    color: '#5a7190',
-  },
-  sidebarLinkActive: {
-    color: '#0a4a8e',
-    textDecoration: 'none',
-    backgroundColor: '#e9f2ff',
-    border: '1px solid #c8dcf8',
-    borderRadius: '8px',
-    padding: '0.55rem 0.65rem',
-    fontWeight: 700,
-  },
-  sidebarLink: {
-    color: '#21496f',
-    textDecoration: 'none',
-    border: '1px solid #d4e0ef',
-    borderRadius: '8px',
-    padding: '0.55rem 0.65rem',
-    backgroundColor: '#f7fbff',
-    fontWeight: 600,
-  },
-  sidebarLinkMuted: {
-    color: '#637a97',
-    backgroundColor: '#f6f9fd',
-    border: '1px dashed #cfdaea',
-    borderRadius: '8px',
-    padding: '0.55rem 0.65rem',
-  },
-  content: {
-    padding: '1.25rem 1.35rem',
-    overflow: 'auto',
-    minWidth: 0,
-    minHeight: 0,
-  },
-  error: {
-    margin: '0.8rem 1.5rem 1rem',
-    color: '#b42318',
-  },
-};

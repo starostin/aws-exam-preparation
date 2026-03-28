@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "TS_NODE_PREFER_TS_EXTS=true nest start --watch",
     "start": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "type-check": "tsc --noEmit",

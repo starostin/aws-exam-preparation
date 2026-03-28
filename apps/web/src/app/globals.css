@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 205 60% 98%;
+  --foreground: 224 43% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 43% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 43% 12%;
+  --primary: 199 89% 45%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 45% 94%;
+  --secondary-foreground: 224 36% 18%;
+  --muted: 210 45% 94%;
+  --muted-foreground: 220 18% 38%;
+  --accent: 172 76% 38%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 35% 86%;
+  --input: 214 35% 86%;
+  --ring: 199 89% 45%;
+  --radius: 0.9rem;
+}
+
+.dark {
+  --background: 220 32% 8%;
+  --foreground: 210 40% 96%;
+  --card: 222 28% 12%;
+  --card-foreground: 210 36% 96%;
+  --popover: 224 28% 10%;
+  --popover-foreground: 210 36% 96%;
+  --primary: 199 89% 55%;
+  --primary-foreground: 222 46% 10%;
+  --secondary: 222 20% 18%;
+  --secondary-foreground: 210 30% 92%;
+  --muted: 222 18% 18%;
+  --muted-foreground: 215 16% 72%;
+  --accent: 172 76% 46%;
+  --accent-foreground: 222 46% 10%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 221 24% 24%;
+  --input: 221 24% 24%;
+  --ring: 199 89% 55%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 12% 18%, hsl(193 82% 76% / 0.38), transparent 34%),
+      radial-gradient(circle at 82% 12%, hsl(214 96% 76% / 0.3), transparent 32%),
+      radial-gradient(circle at 80% 84%, hsl(168 82% 73% / 0.2), transparent 34%);
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at 12% 18%, hsl(193 94% 20% / 0.38), transparent 32%),
+      radial-gradient(circle at 82% 12%, hsl(217 81% 23% / 0.32), transparent 30%),
+      radial-gradient(circle at 80% 84%, hsl(168 92% 17% / 0.2), transparent 34%);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.55s ease-out both;
+}

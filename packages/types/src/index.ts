@@ -48,7 +48,7 @@ export interface Topic {
 
 // ─── Study Plans & Tasks ──────────────────────────────────────────────────────
 
-export type TaskType = "read" | "quiz" | "flashcard" | "mock_exam" | "review";
+export type TaskType = "read" | "quiz" | "flashcard" | "mock_exam" | "review" | "course" | "video";
 export type TaskStatus = "pending" | "in_progress" | "completed" | "carried_over";
 
 export interface StudyPlan {
@@ -65,9 +65,12 @@ export interface StudyTask {
   id: string;
   studyPlanId: string;
   topicId?: string;
+  externalResourceId?: string;
+  title?: string;
   type: TaskType;
   status: TaskStatus;
   scheduledDate: string; // ISO date
+  plannedMinutes?: number;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -179,4 +182,74 @@ export interface User {
   displayName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export interface CreateStudyPlanInput {
+  certificationId: string;
+  targetDate: string; // ISO date string YYYY-MM-DD
+  dailyHours: number;
+  selectedMaterialIds?: string[];
+}
+
+export interface UpdateTaskStatusInput {
+  status: "pending" | "in_progress" | "completed";
+}
+
+export interface RescheduleTaskInput {
+  targetDate: string; // ISO date string YYYY-MM-DD
+}
+
+export interface DashboardStats {
+  streak: number;
+  topicsCompleted: number;
+  totalTopics: number;
+  readinessScore: number | null;
+  quizAccuracy: number | null; // 0–1, null if no attempts
+}
+
+export interface StudyTaskItem {
+  id: string;
+  type: TaskType;
+  status: TaskStatus;
+  scheduledDate: string;
+  topicTitle: string | null;
+  title: string | null;
+  externalResourceId: string | null;
+  topicResourceUrl: string | null;
+  estimatedMinutes: number;
+}
+
+export interface DashboardStudyPlan {
+  id: string;
+  certificationId: string;
+  certificationName: string;
+  certificationCode: string;
+  targetDate: string;
+  dailyHours: number;
+}
+
+export interface UpcomingDay {
+  date: string;
+  tasks: StudyTaskItem[];
+}
+
+export interface DashboardResponse {
+  studyPlan: DashboardStudyPlan | null;
+  todaysTasks: StudyTaskItem[];
+  carryOverTasks: StudyTaskItem[];
+  upcomingTasks: UpcomingDay[];
+  stats: DashboardStats;
+}
+
+export interface WeekSchedule {
+  weekNumber: number;
+  startDate: string; // ISO date YYYY-MM-DD
+  endDate: string;   // ISO date YYYY-MM-DD
+  tasks: StudyTaskItem[];
+}
+
+export interface PlanScheduleResponse {
+  weeks: WeekSchedule[];
 }

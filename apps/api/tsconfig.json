@@ -1,12 +1,14 @@
 {
   "extends": "@aws-exam-prep/config/tsconfig/nestjs",
   "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@aws-exam-prep/types": ["../../packages/types/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "drizzle.config.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]
 }

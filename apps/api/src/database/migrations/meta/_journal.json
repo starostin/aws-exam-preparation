@@ -15,6 +15,20 @@
       "when": 1774630403325,
       "tag": "0001_graceful_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774631400000,
+      "tag": "0002_nimble_sunfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0003_study_plan_course_splitting",
+      "breakpoints": true
     }
   ]
 }

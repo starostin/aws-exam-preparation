@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { CSSProperties, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { signInSchema } from '@/lib/validation/auth';
 import { signInWithEmailPassword, syncUserProfile } from '@/lib/auth/auth-service';
 
@@ -46,116 +48,55 @@ export default function SignInPage() {
   }
 
   return (
-    <main style={styles.page}>
-      <section style={styles.card}>
-        <h1 style={styles.title}>Welcome back</h1>
-        <p style={styles.subtitle}>Sign in to continue your AWS exam prep journey.</p>
+    <main className='grid min-h-screen place-items-center px-4 py-8'>
+      <Card className='w-full max-w-md border-border/70 bg-card/80'>
+        <CardHeader>
+          <CardTitle className='text-3xl text-foreground'>Welcome back</CardTitle>
+          <CardDescription className='text-muted-foreground'>Sign in to continue your AWS exam prep journey.</CardDescription>
+        </CardHeader>
 
-        <form onSubmit={(event) => { void handleSubmit(event); }} style={styles.form}>
-          <label style={styles.label} htmlFor='email'>
-            Email
-          </label>
+        <CardContent>
+          <form onSubmit={(event) => { void handleSubmit(event); }} className='grid gap-3'>
+            <label className='text-sm font-semibold text-foreground' htmlFor='email'>
+              Email
+            </label>
           <input
             id='email'
             type='email'
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder='you@example.com'
-            style={styles.input}
+            className='h-10 rounded-md border border-input bg-background/70 px-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring'
             autoComplete='email'
             required
           />
 
-          <label style={styles.label} htmlFor='password'>
-            Password
-          </label>
+            <label className='text-sm font-semibold text-foreground' htmlFor='password'>
+              Password
+            </label>
           <input
             id='password'
             type='password'
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder='At least 8 characters'
-            style={styles.input}
+            className='h-10 rounded-md border border-input bg-background/70 px-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring'
             autoComplete='current-password'
             required
           />
 
-          {error ? <p style={styles.error}>{error}</p> : null}
+            {error ? <p className='text-sm text-destructive'>{error}</p> : null}
 
-          <button type='submit' disabled={isSubmitting} style={styles.button}>
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+            <Button type='submit' disabled={isSubmitting} className='mt-1 w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
+              {isSubmitting ? 'Signing in...' : 'Sign in'}
+            </Button>
+          </form>
 
-        <p style={styles.footerText}>
-          New here? <Link href='/auth/sign-up'>Create an account</Link>
-        </p>
-      </section>
+          <p className='mt-5 text-sm text-muted-foreground'>
+            New here? <Link className='text-cyan-600 hover:text-cyan-500 dark:text-cyan-300 dark:hover:text-cyan-200' href='/auth/sign-up'>Create an account</Link>
+          </p>
+        </CardContent>
+      </Card>
     </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: '100dvh',
-    display: 'grid',
-    placeItems: 'center',
-    padding: '2rem',
-    boxSizing: 'border-box',
-    background: 'linear-gradient(140deg, #f7f4ec 0%, #d9e8ff 100%)',
-    fontFamily: 'ui-rounded, system-ui, sans-serif',
-  },
-  card: {
-    width: 'min(100%, 460px)',
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    boxShadow: '0 20px 60px rgba(9, 38, 89, 0.14)',
-    border: '1px solid #d6e2f2',
-    padding: '2rem',
-  },
-  title: {
-    margin: 0,
-    fontSize: '2rem',
-    color: '#12305f',
-  },
-  subtitle: {
-    margin: '0.5rem 0 1.5rem',
-    color: '#4a5b78',
-  },
-  form: {
-    display: 'grid',
-    gap: '0.75rem',
-  },
-  label: {
-    fontSize: '0.9rem',
-    fontWeight: 600,
-    color: '#1f355b',
-  },
-  input: {
-    border: '1px solid #b8c7dd',
-    borderRadius: '10px',
-    padding: '0.7rem 0.8rem',
-    fontSize: '1rem',
-    outline: 'none',
-  },
-  button: {
-    marginTop: '0.25rem',
-    border: 0,
-    borderRadius: '10px',
-    backgroundColor: '#0f4c81',
-    color: '#fff',
-    fontWeight: 600,
-    fontSize: '1rem',
-    padding: '0.75rem',
-    cursor: 'pointer',
-  },
-  error: {
-    margin: '0.25rem 0',
-    color: '#b42318',
-    fontSize: '0.92rem',
-  },
-  footerText: {
-    marginTop: '1.5rem',
-    color: '#304566',
-  },
-};

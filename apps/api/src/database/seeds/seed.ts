@@ -12,11 +12,37 @@ import {
   type SeedResource,
   type SeedTopic,
 } from './data/saa-c03-materials';
+import { SAA_STUDY_PLANS } from './data/saa-c03-study-plans';
 
 type CertificationRow = typeof schema.certifications.$inferSelect;
 type DomainRow = typeof schema.domains.$inferSelect;
 type TopicRow = typeof schema.topics.$inferSelect;
 type ExternalResourceRow = typeof schema.externalResources.$inferSelect;
+
+function getDefaultResourcePriority(resource: SeedResource): number {
+  if (resource.priority != null) {
+    // Seed data uses 1 (MUST-HAVE) → 3 (OPTIONAL); DB uses higher = more important (0–100).
+    switch (resource.priority) {
+    case 1: return 90;
+    case 2: return 70;
+    case 3: return 50;
+    default: return 60;
+    }
+  }
+
+  // Fallback by type for any resource without an explicit priority.
+  switch (resource.type) {
+  case 'course':
+    return 90;
+  case 'practice_test':
+    return 85;
+  case 'video':
+    return 75;
+  case 'docs':
+  default:
+    return 65;
+  }
+}
 
 function getDatabaseUrl(): string {
   const dbUrl = process.env['DATABASE_URL'];
@@ -139,6 +165,15 @@ async function getOrCreateTopic(
   return created;
 }
 
+async function clearResourcesForCertification(
+  db: ReturnType<typeof drizzle>,
+  certificationId: string,
+): Promise<void> {
+  await db
+    .delete(schema.externalResources)
+    .where(eq(schema.externalResources.certificationId, certificationId));
+}
+
 async function getExistingResource(
   db: ReturnType<typeof drizzle>,
   certificationId: string,
@@ -190,6 +225,7 @@ async function upsertResource(
         title: resource.title,
         description: resource.description,
         type: resource.type,
+        priority: getDefaultResourcePriority(resource),
         isFree: resource.isFree,
         provider: resource.provider,
         level: resource.level,
@@ -209,6 +245,7 @@ async function upsertResource(
     description: resource.description,
     url: resource.url,
     type: resource.type,
+    priority: getDefaultResourcePriority(resource),
     isFree: resource.isFree,
     provider: resource.provider,
     level: resource.level,
@@ -248,6 +285,8 @@ async function runSeed(): Promise<void> {
       topicIdBySlug.set(topic.slug, seededTopic.id);
     }
 
+    await clearResourcesForCertification(db, certification.id);
+
     for (const resource of SAA_RESOURCES) {
       const topicId = resource.topicSlug ? topicIdBySlug.get(resource.topicSlug) ?? null : null;
 
@@ -260,7 +299,7 @@ async function runSeed(): Promise<void> {
 
     // Keep output concise for CI/local usage while still showing seed coverage.
     // eslint-disable-next-line no-console
-    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${SAA_RESOURCES.length} resources.`);
+    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${SAA_RESOURCES.length} resources, ${SAA_STUDY_PLANS.length} plan templates (static).`);
   } finally {
     await pool.end();
   }

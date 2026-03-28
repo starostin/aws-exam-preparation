@@ -1,15 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { ArrowUpDown, BookOpen, Clock3, ExternalLink, Filter, Grid3x3, Layers, List } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface StudyMaterialItem {
   id: string;
   title: string;
   description: string | null;
   url: string;
-  type: 'docs' | 'video' | 'course' | 'practice_test' | string;
+  type: string;
+  priority: number;
   isFree: boolean;
   provider: string | null;
   level: string | null;
@@ -33,8 +40,19 @@ const PRICE_OPTIONS = [
   { value: 'paid', label: 'Paid only' },
 ] as const;
 
-type SortKey = 'title' | 'type' | 'access' | 'provider' | 'topic' | 'level' | 'time';
+type SortKey = 'title' | 'priority' | 'type' | 'access' | 'provider' | 'topic' | 'level' | 'time';
 type SortDirection = 'asc' | 'desc';
+
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: 'priority', label: 'Priority' },
+  { value: 'title', label: 'Title' },
+  { value: 'type', label: 'Type' },
+  { value: 'access', label: 'Access' },
+  { value: 'provider', label: 'Provider' },
+  { value: 'topic', label: 'Topic' },
+  { value: 'level', label: 'Level' },
+  { value: 'time', label: 'Time' },
+];
 
 export default function MaterialsPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -46,6 +64,7 @@ export default function MaterialsPage() {
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('title');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   const sortedMaterials = useMemo(() => {
     const cloned = [...materials];
@@ -53,6 +72,9 @@ export default function MaterialsPage() {
 
     return cloned.sort((a, b) => {
       switch (sortKey) {
+      case 'priority': {
+        return (a.priority - b.priority) * directionMultiplier;
+      }
       case 'time': {
         const aValue = a.estimatedMinutes ?? Number.MAX_SAFE_INTEGER;
         const bValue = b.estimatedMinutes ?? Number.MAX_SAFE_INTEGER;
@@ -82,21 +104,6 @@ export default function MaterialsPage() {
       }
     });
   }, [materials, sortDirection, sortKey]);
-
-  function toggleSort(column: SortKey): void {
-    if (sortKey === column) {
-      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
-
-    setSortKey(column);
-    setSortDirection('asc');
-  }
-
-  function getSortLabel(column: SortKey): string {
-    if (sortKey !== column) return '';
-    return sortDirection === 'asc' ? ' ▲' : ' ▼';
-  }
 
   async function loadMaterials(): Promise<void> {
     setIsLoading(true);
@@ -149,241 +156,349 @@ export default function MaterialsPage() {
   }, []);
 
   return (
-    <section style={styles.page}>
-      <section style={styles.filtersWrap}>
-        <div style={styles.filterItem}>
-          <label htmlFor='type' style={styles.label}>Type</label>
-          <select
-            id='type'
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value as (typeof TYPE_OPTIONS)[number]['value'])}
-            style={styles.select}
-          >
-            {TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+    <section className='space-y-5 pb-8 animate-rise-in'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
+        <div>
+          <h2 className='text-3xl font-semibold text-foreground'>Study Materials</h2>
+          <p className='mt-1 text-sm text-muted-foreground'>Curated resources, ranked by priority and optimized for your prep.</p>
         </div>
-
-        <div style={styles.filterItem}>
-          <label htmlFor='price' style={styles.label}>Access</label>
-          <select
-            id='price'
-            value={priceFilter}
-            onChange={(event) => setPriceFilter(event.target.value as (typeof PRICE_OPTIONS)[number]['value'])}
-            style={styles.select}
-          >
-            {PRICE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+        <div className='flex items-center gap-3'>
+          <Badge className='bg-cyan-500/15 text-cyan-700 dark:text-cyan-200'>
+            <BookOpen className='mr-1 h-3.5 w-3.5' />
+            {sortedMaterials.length} resources
+          </Badge>
+          <div className='flex gap-1 rounded-lg border border-border/70 bg-card/70 p-1'>
+            <Button
+              type='button'
+              size='sm'
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              className={cn(
+                viewMode === 'cards'
+                  ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+              onClick={() => setViewMode('cards')}
+            >
+              <Grid3x3 className='h-4 w-4' />
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              className={cn(
+                viewMode === 'table'
+                  ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+              onClick={() => setViewMode('table')}
+            >
+              <List className='h-4 w-4' />
+            </Button>
+          </div>
         </div>
-
-        <div style={{ ...styles.filterItem, flex: 1 }}>
-          <label htmlFor='search' style={styles.label}>Search</label>
-          <input
-            id='search'
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder='Try: VPC, Well-Architected, Tutorials Dojo'
-            style={styles.input}
-          />
-        </div>
-
-        <button type='button' onClick={() => { void loadMaterials(); }} disabled={isLoading} style={styles.loadButton}>
-          {isLoading ? 'Loading...' : 'Apply Filters'}
-        </button>
-      </section>
-
-      {error ? <p style={styles.error}>{error}</p> : null}
-
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('title')} style={styles.sortButton}>
-                  Title{getSortLabel('title')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('type')} style={styles.sortButton}>
-                  Type{getSortLabel('type')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('access')} style={styles.sortButton}>
-                  Access{getSortLabel('access')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('provider')} style={styles.sortButton}>
-                  Provider{getSortLabel('provider')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('topic')} style={styles.sortButton}>
-                  Topic{getSortLabel('topic')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('level')} style={styles.sortButton}>
-                  Level{getSortLabel('level')}
-                </button>
-              </th>
-              <th style={styles.th}>
-                <button type='button' onClick={() => toggleSort('time')} style={styles.sortButton}>
-                  Time{getSortLabel('time')}
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedMaterials.map((material) => (
-              <tr key={material.id}>
-                <td style={styles.tdTitle}>
-                  <a href={material.url} target='_blank' rel='noreferrer' style={styles.link}>
-                    {material.title}
-                  </a>
-                  {material.description ? <p style={styles.description}>{material.description}</p> : null}
-                </td>
-                <td style={styles.td}>{material.type}</td>
-                <td style={styles.td}>{material.isFree ? 'Free' : 'Paid'}</td>
-                <td style={styles.td}>{material.provider ?? 'Unknown'}</td>
-                <td style={styles.td}>{material.topicTitle ?? 'General'}</td>
-                <td style={styles.td}>{material.level ?? 'mixed'}</td>
-                <td style={styles.td}>{material.estimatedMinutes ? `${material.estimatedMinutes} min` : '-'}</td>
-              </tr>
-            ))}
-
-            {!isLoading && sortedMaterials.length === 0 ? (
-              <tr>
-                <td style={styles.emptyRow} colSpan={7}>
-                  No materials found for the selected filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
       </div>
+
+      <Card className='border-border/70 bg-card/70'>
+        <CardHeader className='pb-4'>
+          <CardTitle className='flex items-center gap-2 text-foreground'>
+            <Filter className='h-4 w-4 text-cyan-700 dark:text-cyan-300' />
+            Filters & Sorting
+          </CardTitle>
+          <CardDescription className='text-muted-foreground'>Tune the list to match your current focus.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-5'>
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Type</p>
+              <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as (typeof TYPE_OPTIONS)[number]['value'])}>
+                <SelectTrigger className='bg-background/70 text-foreground'>
+                  <SelectValue placeholder='All types' />
+                </SelectTrigger>
+                <SelectContent>
+                  {TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Access</p>
+              <Select value={priceFilter} onValueChange={(value) => setPriceFilter(value as (typeof PRICE_OPTIONS)[number]['value'])}>
+                <SelectTrigger className='bg-background/70 text-foreground'>
+                  <SelectValue placeholder='Free + Paid' />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRICE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Sort By</p>
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+                <SelectTrigger className='bg-background/70 text-foreground'>
+                  <SelectValue placeholder='Sort by' />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Direction</p>
+              <Button
+                type='button'
+                variant='outline'
+                className='w-full justify-start border-border bg-background/70 text-foreground hover:bg-muted'
+                onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+              >
+                <ArrowUpDown className='h-4 w-4' />
+                {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+              </Button>
+            </div>
+
+            <div className='space-y-2 md:col-span-2 xl:col-span-1'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Search</p>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder='Try: VPC, Well-Architected'
+                className='h-10 w-full rounded-md border border-input bg-background/70 px-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring'
+              />
+            </div>
+          </div>
+
+          <div className='mt-4 flex flex-wrap gap-2'>
+            <Button type='button' onClick={() => { void loadMaterials(); }} disabled={isLoading} className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
+              {isLoading ? 'Loading...' : 'Apply Filters'}
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              className='text-muted-foreground hover:bg-muted hover:text-foreground'
+              onClick={() => {
+                setTypeFilter('all');
+                setPriceFilter('all');
+                setSortKey('title');
+                setSortDirection('asc');
+                setSearch('');
+              }}
+            >
+              Reset Controls
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error ? <p className='rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive'>{error}</p> : null}
+
+      {!isLoading && sortedMaterials.length === 0 ? (
+        <Card className='border-border/70 bg-card/70'>
+          <CardContent className='py-10 text-center text-muted-foreground'>No materials found for the selected filters.</CardContent>
+        </Card>
+      ) : null}
+
+      {viewMode === 'cards' ? (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          {sortedMaterials.map((material) => (
+            <Card key={material.id} className='border-border/70 bg-card/70 transition-colors hover:border-cyan-400/35'>
+              <CardHeader className='pb-3'>
+                <div className='flex items-start justify-between gap-3'>
+                  <CardTitle className='text-lg text-foreground'>{material.title}</CardTitle>
+                  <Badge className='bg-cyan-500/15 text-cyan-700 dark:text-cyan-200'>P{material.priority}</Badge>
+                </div>
+                <CardDescription className='line-clamp-2 text-muted-foreground'>
+                  {material.description ?? 'No description provided.'}
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className='space-y-4'>
+                <div className='flex flex-wrap gap-2'>
+                  <Badge variant='secondary'>{material.type}</Badge>
+                  <Badge variant='secondary'>{material.isFree ? 'Free' : 'Paid'}</Badge>
+                  <Badge variant='secondary'>{material.level ?? 'mixed'}</Badge>
+                  <Badge variant='secondary'>
+                    <Layers className='mr-1 h-3.5 w-3.5' />
+                    {material.topicTitle ?? 'General'}
+                  </Badge>
+                  {material.estimatedMinutes ? (
+                    <Badge variant='secondary'>
+                      <Clock3 className='mr-1 h-3.5 w-3.5' />
+                      {material.estimatedMinutes} min
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                  <p className='text-xs text-muted-foreground'>Provider: {material.provider ?? 'Unknown'}</p>
+                  <Button asChild className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
+                    <a href={material.url} target='_blank' rel='noreferrer'>
+                      Open Resource
+                      <ExternalLink className='h-4 w-4' />
+                    </a>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className='overflow-hidden border-border/70 bg-card/70'>
+          <div className='overflow-x-auto'>
+            <table className='w-full text-sm'>
+              <thead>
+                <tr className='border-b border-border/70 bg-card/90'>
+                  <TableHeader
+                    label='Title'
+                    sortKey='title'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Priority'
+                    sortKey='priority'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Type'
+                    sortKey='type'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Access'
+                    sortKey='access'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Provider'
+                    sortKey='provider'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Topic'
+                    sortKey='topic'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Level'
+                    sortKey='level'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <TableHeader
+                    label='Time'
+                    sortKey='time'
+                    currentSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={setSortKey}
+                  />
+                  <th className='px-4 py-3 text-left font-semibold text-foreground'>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedMaterials.map((material) => (
+                  <tr
+                    key={material.id}
+                    className='border-b border-border/50 transition-colors hover:bg-muted/60'
+                  >
+                    <td className='max-w-sm truncate px-4 py-3 text-foreground'>{material.title}</td>
+                    <td className='px-4 py-3'>
+                      <Badge className='bg-cyan-500/15 text-cyan-700 dark:text-cyan-200'>P{material.priority}</Badge>
+                    </td>
+                    <td className='px-4 py-3'>
+                      <Badge variant='secondary'>{material.type}</Badge>
+                    </td>
+                    <td className='px-4 py-3'>
+                      <Badge variant='secondary'>
+                        {material.isFree ? 'Free' : 'Paid'}
+                      </Badge>
+                    </td>
+                    <td className='px-4 py-3 text-xs text-muted-foreground'>{material.provider ?? 'Unknown'}</td>
+                    <td className='px-4 py-3 text-xs text-muted-foreground'>{material.topicTitle ?? 'General'}</td>
+                    <td className='px-4 py-3'>
+                      <Badge variant='secondary'>
+                        {material.level ?? 'mixed'}
+                      </Badge>
+                    </td>
+                    <td className='px-4 py-3 text-xs text-muted-foreground'>
+                      {material.estimatedMinutes ? `${material.estimatedMinutes}m` : '–'}
+                    </td>
+                    <td className='px-4 py-3'>
+                      <Button asChild size='sm' className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
+                        <a href={material.url} target='_blank' rel='noreferrer'>
+                          <ExternalLink className='h-3.5 w-3.5' />
+                        </a>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </section>
   );
 }
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: '100%',
-  },
-  filtersWrap: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.75rem',
-    alignItems: 'flex-end',
-    padding: '1rem 1.5rem',
-    borderBottom: '1px solid #ecf2fa',
-  },
-  filterItem: {
-    display: 'grid',
-    gap: '0.35rem',
-    minWidth: '180px',
-  },
-  label: {
-    fontSize: '0.85rem',
-    color: '#365273',
-    fontWeight: 700,
-  },
-  select: {
-    border: '1px solid #c3d5ec',
-    borderRadius: '8px',
-    padding: '0.5rem 0.55rem',
-    fontSize: '0.95rem',
-  },
-  input: {
-    border: '1px solid #c3d5ec',
-    borderRadius: '8px',
-    padding: '0.5rem 0.55rem',
-    fontSize: '0.95rem',
-  },
-  loadButton: {
-    border: 0,
-    borderRadius: '8px',
-    backgroundColor: '#0f4c81',
-    color: '#fff',
-    padding: '0.55rem 0.8rem',
-    fontWeight: 700,
-    cursor: 'pointer',
-    height: '38px',
-  },
-  error: {
-    margin: '0.9rem 1.5rem 0',
-    color: '#b42318',
-    fontSize: '0.93rem',
-  },
-  tableWrap: {
-    width: '100%',
-    overflowX: 'auto',
-    padding: '0.6rem 1rem 1rem',
-    boxSizing: 'border-box',
-  },
-  table: {
-    width: '100%',
-    minWidth: '980px',
-    borderCollapse: 'collapse',
-  },
-  th: {
-    textAlign: 'left',
-    borderBottom: '1px solid #dbe6f4',
-    color: '#27486f',
-    background: '#f9fbff',
-    fontWeight: 700,
-    padding: '0.65rem 0.7rem',
-    fontSize: '0.85rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.03em',
-  },
-  sortButton: {
-    border: 0,
-    background: 'transparent',
-    padding: 0,
-    margin: 0,
-    color: 'inherit',
-    font: 'inherit',
-    textTransform: 'inherit',
-    letterSpacing: 'inherit',
-    cursor: 'pointer',
-  },
-  td: {
-    borderBottom: '1px solid #ecf2fa',
-    padding: '0.65rem 0.7rem',
-    color: '#2f4a68',
-    fontSize: '0.92rem',
-    verticalAlign: 'top',
-  },
-  tdTitle: {
-    borderBottom: '1px solid #ecf2fa',
-    padding: '0.65rem 0.7rem',
-    verticalAlign: 'top',
-    minWidth: '320px',
-  },
-  link: {
-    color: '#0a4a8e',
-    fontWeight: 700,
-    textDecoration: 'none',
-  },
-  description: {
-    margin: '0.32rem 0 0',
-    color: '#496585',
-    fontSize: '0.87rem',
-    lineHeight: 1.35,
-  },
-  emptyRow: {
-    textAlign: 'center',
-    color: '#55718f',
-    padding: '1rem',
-    fontStyle: 'italic',
-  },
-};
+interface TableHeaderProps {
+  label: string;
+  sortKey: SortKey;
+  currentSortKey: SortKey;
+  sortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+}
+
+function TableHeader({
+  label,
+  sortKey,
+  currentSortKey,
+  sortDirection,
+  onSort,
+}: TableHeaderProps) {
+  const isActive = currentSortKey === sortKey;
+
+  return (
+    <th className='px-4 py-3 text-left'>
+      <button
+        type='button'
+        className='flex items-center gap-1 font-semibold text-foreground transition-colors hover:text-cyan-500'
+        onClick={() => onSort(sortKey)}
+      >
+        {label}
+        {isActive && (
+          <ArrowUpDown
+            className={cn(
+              'h-3.5 w-3.5 transition-transform',
+              sortDirection === 'desc' && 'rotate-180',
+            )}
+          />
+        )}
+      </button>
+    </th>
+  );
+}

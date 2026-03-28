@@ -4,6 +4,23 @@ interface RequestOptions extends RequestInit {
   token?: string;
 }
 
+interface ErrorPayload {
+  message?: string;
+}
+
+function buildApiUrl(baseUrl: string, path: string): string {
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Avoid duplicated API version when NEXT_PUBLIC_API_URL already ends with /v1.
+  const finalPath =
+    normalizedBase.endsWith("/v1") && normalizedPath.startsWith("/v1/")
+      ? normalizedPath.slice(3)
+      : normalizedPath;
+
+  return `${normalizedBase}${finalPath}`;
+}
+
 async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { token, ...fetchOptions } = options;
 
@@ -16,13 +33,16 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${env.NEXT_PUBLIC_API_URL}${path}`, {
+  const response = await fetch(buildApiUrl(env.NEXT_PUBLIC_API_URL, path), {
     ...fetchOptions,
     headers,
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Unknown error" }));
+    const error: ErrorPayload = await response
+      .json()
+      .then((value: unknown) => (typeof value === 'object' && value !== null ? (value as ErrorPayload) : {}))
+      .catch(() => ({ message: 'Unknown error' }));
     throw new Error(error.message ?? `HTTP ${response.status}`);
   }
 

@@ -3,7 +3,7 @@ import { pgTable, uuid, varchar, text, timestamp, boolean, integer, real, date, 
 // ─── Enumerations ──────────────────────────────────────────────────────────────
 
 export const topicStatusEnum = pgEnum('topic_status', ['not_started', 'in_progress', 'completed']);
-export const taskTypeEnum = pgEnum('task_type', ['read', 'quiz', 'flashcard', 'mock_exam', 'review']);
+export const taskTypeEnum = pgEnum('task_type', ['read', 'quiz', 'flashcard', 'mock_exam', 'review', 'course', 'video']);
 export const taskStatusEnum = pgEnum('task_status', ['pending', 'in_progress', 'completed', 'carried_over']);
 export const mockExamStatusEnum = pgEnum('mock_exam_status', ['not_started', 'in_progress', 'completed']);
 export const questionDifficultyEnum = pgEnum('question_difficulty', ['easy', 'medium', 'hard']);
@@ -79,9 +79,12 @@ export const studyTasks = pgTable('study_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   studyPlanId: uuid('study_plan_id').notNull().references(() => studyPlans.id),
   topicId: uuid('topic_id').references(() => topics.id),
+  externalResourceId: uuid('external_resource_id'),
+  title: varchar('title', { length: 255 }),
   type: taskTypeEnum('type').notNull(),
   status: taskStatusEnum('status').notNull().default('pending'),
   scheduledDate: date('scheduled_date').notNull(),
+  plannedMinutes: integer('planned_minutes'),
   completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -204,6 +207,7 @@ export const externalResources = pgTable('external_resources', {
   isFree: boolean('is_free').notNull().default(true),
   provider: varchar('provider', { length: 100 }),
   level: varchar('level', { length: 30 }), // beginner | intermediate | advanced | mixed
+  priority: integer('priority').notNull().default(50), // 0-100, higher means more important
   tags: jsonb('tags').$type<string[]>().notNull(),
   estimatedMinutes: integer('estimated_minutes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

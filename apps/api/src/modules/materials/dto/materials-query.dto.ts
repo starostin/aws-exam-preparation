@@ -1,9 +1,13 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 const RESOURCE_TYPES = ['docs', 'video', 'course', 'practice_test'] as const;
 
 export class MaterialsQueryDto {
+  @IsOptional()
+  @IsUUID()
+  certificationId?: string;
+
   @IsOptional()
   @IsIn(RESOURCE_TYPES)
   type?: (typeof RESOURCE_TYPES)[number];
