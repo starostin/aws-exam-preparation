@@ -16,6 +16,7 @@ This app is for individual learners who want a structured, daily study workflow 
 
 - Show a personalized daily study plan each time the user opens the app
 - Present clear tasks for the day, such as reading a topic, completing a quiz, reviewing flashcards, or taking part of a mock exam
+- Include quizzes in the study plan both as follow-up tasks after learning a topic and as standalone practice tasks in the regular daily schedule
 - Track which daily tasks are complete, in progress, or still pending
 - Carry unfinished tasks into the next day when appropriate
 - Allow users to pull and work on tasks from future days for self-paced flexibility
@@ -54,6 +55,7 @@ This app is for individual learners who want a structured, daily study workflow 
 ### 5. Practice Quizzes
 
 - Offer quizzes for individual topics and domains
+- Add quizzes to the study plan so they can appear immediately after studying a related topic or as normal scheduled practice items
 - Show instant feedback after answering each question or after quiz completion
 - Include explanations for both correct and incorrect answers
 - Track user performance for every quiz

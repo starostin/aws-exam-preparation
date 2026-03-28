@@ -13,6 +13,7 @@ import {
   type SeedTopic,
 } from './data/saa-c03-materials';
 import { SAA_STUDY_PLANS } from './data/saa-c03-study-plans';
+import { SAA_QUIZ_QUESTIONS, type SeedQuizQuestion } from './data/saa-c03-quizzes';
 
 type CertificationRow = typeof schema.certifications.$inferSelect;
 type DomainRow = typeof schema.domains.$inferSelect;
@@ -254,6 +255,39 @@ async function upsertResource(
   });
 }
 
+async function upsertQuizQuestion(
+  db: ReturnType<typeof drizzle>,
+  topicId: string,
+  question: SeedQuizQuestion,
+): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(schema.quizQuestions)
+    .where(and(eq(schema.quizQuestions.topicId, topicId), eq(schema.quizQuestions.text, question.text)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(schema.quizQuestions)
+      .set({
+        options: question.options,
+        explanation: question.explanation,
+        difficulty: question.difficulty,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.quizQuestions.id, existing.id));
+    return;
+  }
+
+  await db.insert(schema.quizQuestions).values({
+    topicId,
+    text: question.text,
+    options: question.options,
+    explanation: question.explanation,
+    difficulty: question.difficulty,
+  });
+}
+
 async function runSeed(): Promise<void> {
   dotenv.config({ path: '.env.local' });
   dotenv.config();
@@ -297,9 +331,17 @@ async function runSeed(): Promise<void> {
       await upsertResource(db, certification.id, topicId, resource);
     }
 
+    for (const question of SAA_QUIZ_QUESTIONS) {
+      const topicId = topicIdBySlug.get(question.topicSlug);
+      if (!topicId) {
+        throw new Error(`Missing topic for quiz question (topicSlug: ${question.topicSlug})`);
+      }
+      await upsertQuizQuestion(db, topicId, question);
+    }
+
     // Keep output concise for CI/local usage while still showing seed coverage.
     // eslint-disable-next-line no-console
-    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${SAA_RESOURCES.length} resources, ${SAA_STUDY_PLANS.length} plan templates (static).`);
+    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${SAA_RESOURCES.length} resources, ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions.`);
   } finally {
     await pool.end();
   }

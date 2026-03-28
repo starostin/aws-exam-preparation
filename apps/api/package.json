@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev": "TS_NODE_PREFER_TS_EXTS=true nest start --watch",
-    "start": "node dist/main",
+    "dev": "TS_NODE_PREFER_TS_EXTS=true nest start --watch --entryFile apps/api/src/main",
+    "start": "node dist/apps/api/src/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "type-check": "tsc --noEmit",
     "test": "jest",

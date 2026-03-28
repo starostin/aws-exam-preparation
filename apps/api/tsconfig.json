@@ -2,7 +2,6 @@
   "extends": "@aws-exam-prep/config/tsconfig/nestjs",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],

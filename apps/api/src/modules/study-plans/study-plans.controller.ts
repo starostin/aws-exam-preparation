@@ -38,6 +38,8 @@ export class StudyPlansController {
 
   @Get('me/dashboard')
   async getDashboard(@CurrentUser() user: AuthUser): Promise<DashboardResponse> {
+    console.log('-=as-as-as0-as0-');
+    
     return this.studyPlansService.getDashboard(user.id);
   }
 

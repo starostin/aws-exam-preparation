@@ -71,9 +71,22 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function normalizeTopicTitle(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
   const today = new Date().toISOString().split('T')[0]!;
   const materialById = new Map(materials.map((m) => [m.id, m]));
+  const materialByTopicTitle = new Map<string, StudyMaterialItem>();
+  for (const material of materials) {
+    if (!material.topicTitle || !material.url) continue;
+    const key = normalizeTopicTitle(material.topicTitle);
+    const existing = materialByTopicTitle.get(key);
+    if (!existing || material.priority < existing.priority) {
+      materialByTopicTitle.set(key, material);
+    }
+  }
 
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => {
     const currentWeek = weeks.find((w) => w.startDate <= today && w.endDate >= today);
@@ -268,7 +281,9 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                         {dayTasks.map((task) => {
                           const material = task.externalResourceId
                             ? materialById.get(task.externalResourceId)
-                            : undefined;
+                            : task.type === 'quiz' && task.topicTitle
+                              ? materialByTopicTitle.get(normalizeTopicTitle(task.topicTitle))
+                              : undefined;
                           const typeColorClass = TYPE_COLORS[task.type] ?? 'bg-muted text-muted-foreground';
                           const isCompleted = task.status === 'completed';
                           const isInProgress = task.status === 'in_progress';

@@ -42,6 +42,7 @@ export interface StudyPlanTemplate {
 
 export interface StudyTaskItem {
   id: string;
+  topicId: string | null;
   type: StudyTaskType;
   status: StudyTaskStatus;
   scheduledDate: string;
@@ -126,6 +127,7 @@ export type PlanRow = {
 
 type ExternalResourceTask = {
   id: string;
+  topicId: string | null;
   title: string;
   type: ExternalResourceType;
   priority: number;
@@ -287,7 +289,10 @@ export class StudyPlansService {
       .where(
         and(
           eq(schema.studyTasks.studyPlanId, studyPlanId),
-          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+          or(
+            sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+            eq(schema.studyTasks.type, 'quiz'),
+          ),
           inArray(schema.studyTasks.status, ['pending', 'in_progress', 'carried_over']),
         ),
       );
@@ -295,6 +300,7 @@ export class StudyPlansService {
     const resources = await this.db
       .select({
         id: schema.externalResources.id,
+        topicId: schema.externalResources.topicId,
         title: schema.externalResources.title,
         type: schema.externalResources.type,
         priority: schema.externalResources.priority,
@@ -396,6 +402,7 @@ export class StudyPlansService {
 
         tasksToInsert.push({
           studyPlanId,
+          topicId: resource.topicId,
           externalResourceId: resource.id,
           title: shouldSplit ? `${resource.title} (Part ${segmentIndex})` : resource.title,
           type: taskType,
@@ -417,6 +424,136 @@ export class StudyPlansService {
 
     if (tasksToInsert.length === 0) return;
     await this.db.insert(schema.studyTasks).values(tasksToInsert);
+    await this.ensurePlannedQuizTasks(studyPlanId, certificationId);
+  }
+
+  private async ensurePlannedQuizTasks(
+    studyPlanId: string,
+    certificationId: string,
+  ): Promise<void> {
+    await this.db.execute(sql`
+      UPDATE study_tasks AS st
+      SET topic_id = er.topic_id,
+          updated_at = NOW()
+      FROM external_resources AS er
+      WHERE st.study_plan_id = ${studyPlanId}
+        AND st.external_resource_id = er.id
+        AND st.topic_id IS NULL
+        AND er.topic_id IS NOT NULL
+    `);
+
+    const quizQuestionTopics = await this.db
+      .selectDistinct({ topicId: schema.quizQuestions.topicId })
+      .from(schema.quizQuestions)
+      .innerJoin(schema.topics, eq(schema.quizQuestions.topicId, schema.topics.id))
+      .innerJoin(schema.domains, eq(schema.topics.domainId, schema.domains.id))
+      .where(eq(schema.domains.certificationId, certificationId));
+
+    const quizQuestionTopicIds = new Set(quizQuestionTopics.map((row) => row.topicId));
+    if (quizQuestionTopicIds.size === 0) return;
+
+    const existingQuizTasks = await this.db
+      .select({ topicId: schema.studyTasks.topicId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, studyPlanId),
+          eq(schema.studyTasks.type, 'quiz'),
+          sql`${schema.studyTasks.topicId} IS NOT NULL`,
+        ),
+      );
+
+    const existingQuizTopicIds = new Set(
+      existingQuizTasks
+        .map((row) => row.topicId)
+        .filter((topicId): topicId is string => Boolean(topicId)),
+    );
+
+    const allStudyTasks = await this.db
+      .select({
+        topicId: schema.studyTasks.topicId,
+        externalResourceId: schema.studyTasks.externalResourceId,
+        scheduledDate: schema.studyTasks.scheduledDate,
+        type: schema.studyTasks.type,
+        resourceTopicId: schema.externalResources.topicId,
+      })
+      .from(schema.studyTasks)
+      .leftJoin(
+        schema.externalResources,
+        eq(schema.studyTasks.externalResourceId, schema.externalResources.id),
+      )
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, studyPlanId),
+          inArray(schema.studyTasks.type, ['read', 'review', 'course', 'video']),
+        ),
+      );
+
+    const topicMaxDates = new Map<string, Date>();
+    for (const task of allStudyTasks) {
+      const topicId = task.topicId || task.resourceTopicId;
+      if (!topicId) continue;
+
+      const currentMax = topicMaxDates.get(topicId);
+      const taskDate = new Date(String(task.scheduledDate));
+
+      if (!currentMax || taskDate > currentMax) {
+        topicMaxDates.set(topicId, taskDate);
+      }
+    }
+
+    const quizTasksToInsert: (typeof schema.studyTasks.$inferInsert)[] = [];
+
+    for (const [topicId, lastStudyDate] of topicMaxDates.entries()) {
+      if (!quizQuestionTopicIds.has(topicId)) continue;
+      if (existingQuizTopicIds.has(topicId)) continue;
+
+      const quizDate = new Date(lastStudyDate);
+      quizDate.setUTCDate(quizDate.getUTCDate() + 1);
+      const quizDateStr = toDateString(quizDate);
+
+      quizTasksToInsert.push({
+        studyPlanId,
+        topicId,
+        type: 'quiz',
+        status: 'pending',
+        scheduledDate: quizDateStr,
+        plannedMinutes: TASK_MINUTES.quiz,
+      });
+    }
+
+    if (quizTasksToInsert.length === 0) {
+      const queuedQuizTopicIds = new Set<string>();
+      const remainingTopics = Array.from(quizQuestionTopicIds).filter(
+        (topicId) => !existingQuizTopicIds.has(topicId) && !queuedQuizTopicIds.has(topicId),
+      );
+
+      if (remainingTopics.length > 0) {
+        const planDates = await this.db
+          .selectDistinct({ scheduledDate: schema.studyTasks.scheduledDate })
+          .from(schema.studyTasks)
+          .where(eq(schema.studyTasks.studyPlanId, studyPlanId))
+          .orderBy(asc(schema.studyTasks.scheduledDate));
+
+        const maxStandaloneQuizzes = Math.min(planDates.length, remainingTopics.length);
+        for (let i = 0; i < maxStandaloneQuizzes; i++) {
+          const topicId = remainingTopics[i]!;
+          const scheduledDate = String(planDates[i]!.scheduledDate);
+          quizTasksToInsert.push({
+            studyPlanId,
+            topicId,
+            type: 'quiz',
+            status: 'pending',
+            scheduledDate,
+            plannedMinutes: TASK_MINUTES.quiz,
+          });
+          queuedQuizTopicIds.add(topicId);
+        }
+      }
+    }
+
+    if (quizTasksToInsert.length === 0) return;
+    await this.db.insert(schema.studyTasks).values(quizTasksToInsert);
   }
 
   private mapExternalResourceTypeToTaskType(resourceType: ExternalResourceType): StudyTaskType {
@@ -548,6 +685,8 @@ export class StudyPlansService {
       return { studyPlan: null, todaysTasks: [], carryOverTasks: [], upcomingTasks: [], stats: emptyStats };
     }
 
+    await this.ensurePlannedQuizTasks(plan.id, plan.certificationId);
+
     const today = toDateString(new Date());
     const nextWeek = toDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
@@ -570,6 +709,7 @@ export class StudyPlansService {
     const rawTasks = await this.db
       .select({
         id: schema.studyTasks.id,
+        topicId: schema.studyTasks.topicId,
         type: schema.studyTasks.type,
         status: schema.studyTasks.status,
         scheduledDate: schema.studyTasks.scheduledDate,
@@ -603,6 +743,7 @@ export class StudyPlansService {
     for (const row of rawTasks) {
       const item: StudyTaskItem = {
         id: row.id,
+        topicId: row.topicId ?? null,
         type: row.type as StudyTaskItem['type'],
         status: row.status as StudyTaskItem['status'],
         scheduledDate: String(row.scheduledDate),
@@ -623,6 +764,7 @@ export class StudyPlansService {
     const rawUpcoming = await this.db
       .select({
         id: schema.studyTasks.id,
+        topicId: schema.studyTasks.topicId,
         type: schema.studyTasks.type,
         status: schema.studyTasks.status,
         scheduledDate: schema.studyTasks.scheduledDate,
@@ -654,6 +796,7 @@ export class StudyPlansService {
       const dateKey = String(row.scheduledDate);
       const item: StudyTaskItem = {
         id: row.id,
+        topicId: row.topicId ?? null,
         type: row.type as StudyTaskItem['type'],
         status: row.status as StudyTaskItem['status'],
         scheduledDate: dateKey,
@@ -693,9 +836,12 @@ export class StudyPlansService {
     const plan = await this.getMyStudyPlan(userId);
     if (!plan) return { weeks: [] };
 
+    await this.ensurePlannedQuizTasks(plan.id, plan.certificationId);
+
     const rawTasks = await this.db
       .select({
         id: schema.studyTasks.id,
+        topicId: schema.studyTasks.topicId,
         type: schema.studyTasks.type,
         status: schema.studyTasks.status,
         scheduledDate: schema.studyTasks.scheduledDate,
@@ -727,6 +873,7 @@ export class StudyPlansService {
 
       const item: StudyTaskItem = {
         id: row.id,
+        topicId: row.topicId ?? null,
         type: row.type as StudyTaskType,
         status: row.status as StudyTaskStatus,
         scheduledDate: String(row.scheduledDate),
@@ -795,9 +942,6 @@ export class StudyPlansService {
     if (existing.length === 0 && todaysExistingTasks.length === 0) {
       // no-op, the generation below will create the first tasks for the day
     }
-
-    const hasNonResourceTaskForToday = todaysExistingTasks.some((task) => !task.externalResourceId);
-    if (hasNonResourceTaskForToday) return;
 
     let budgetMinutes = Math.floor(plan.dailyHours * 60);
     for (const task of todaysExistingTasks) {
@@ -877,8 +1021,17 @@ export class StudyPlansService {
       const status = topic.userStatus ?? 'not_started';
       if (status === 'completed') continue;
 
-      const type: StudyTaskType = status === 'in_progress' ? 'review' : 'read';
-      if (tryAddTopicTask(topic.topicId, type)) {
+      let addedTask = false;
+      if (status === 'in_progress') {
+        addedTask = tryAddTopicTask(topic.topicId, 'review');
+      } else {
+        addedTask = tryAddTopicTask(topic.topicId, 'read');
+        if (addedTask) {
+          tryAddTopicTask(topic.topicId, 'quiz');
+        }
+      }
+
+      if (addedTask) {
         prioritizedToday.add(topic.topicId);
       }
     }
@@ -1194,6 +1347,7 @@ export class StudyPlansService {
     const rawUpcoming = await this.db
       .select({
         id: schema.studyTasks.id,
+        topicId: schema.studyTasks.topicId,
         type: schema.studyTasks.type,
         status: schema.studyTasks.status,
         scheduledDate: schema.studyTasks.scheduledDate,
@@ -1222,6 +1376,7 @@ export class StudyPlansService {
       const dateKey = String(row.scheduledDate);
       const item: StudyTaskItem = {
         id: row.id,
+        topicId: row.topicId ?? null,
         type: row.type as StudyTaskType,
         status: row.status as StudyTaskStatus,
         scheduledDate: dateKey,

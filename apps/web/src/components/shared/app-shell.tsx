@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BookOpen, CalendarClock, ClipboardList, LayoutDashboard, LogOut, Sparkles } from 'lucide-react';
+import { BookOpen, CalendarClock, ClipboardList, HelpCircle, LayoutDashboard, LogOut, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -82,10 +82,11 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  const navItems: Array<{ href: '/' | '/study-plans' | '/materials'; label: string; icon: LucideIcon }> = [
+  const navItems: Array<{ href: '/' | '/study-plans' | '/materials' | '/quizzes'; label: string; icon: LucideIcon }> = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/study-plans', label: 'Study Plans', icon: ClipboardList },
     { href: '/materials', label: 'Study Materials', icon: BookOpen },
+    { href: '/quizzes', label: 'Quizzes', icon: HelpCircle },
   ];
 
   return (
@@ -124,7 +125,6 @@ export function AppShell({ children }: AppShellProps) {
 
             <div className='mt-4 space-y-2 rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground'>
               <p className='font-medium text-foreground'>Coming Next</p>
-              <p>Quizzes</p>
               <p>Mock Exams</p>
               <p>Progress</p>
             </div>

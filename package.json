@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "turbo dev",
+    "dev:stream": "turbo dev --ui=stream",
     "build": "turbo build",
     "lint": "turbo lint",
     "type-check": "turbo type-check",

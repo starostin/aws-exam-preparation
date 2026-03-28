@@ -106,6 +106,71 @@ export interface QuizAttempt {
   attemptedAt: string;
 }
 
+export type QuizMode = "topic" | "mixed";
+
+export interface QuizTopicSummary {
+  topicId: string;
+  topicTitle: string;
+  domainName: string;
+  questionCount: number;
+}
+
+export interface ListQuizQuestionsInput {
+  mode?: QuizMode;
+  topicId?: string;
+  certificationId?: string;
+  difficulty?: QuestionDifficulty;
+  limit?: number;
+}
+
+export interface PublicQuizOption {
+  id: string;
+  text: string;
+}
+
+export interface QuizQuestionItem {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  domainName: string;
+  text: string;
+  options: PublicQuizOption[];
+  difficulty: QuestionDifficulty;
+}
+
+export interface SubmitQuizAttemptInput {
+  questionId: string;
+  selectedOptionId: string;
+}
+
+export interface SubmitQuizAttemptResponse {
+  attemptId: string;
+  questionId: string;
+  selectedOptionId: string;
+  isCorrect: boolean;
+  correctOptionId: string;
+  explanation: string;
+  topicId: string;
+  topicTitle: string | null;
+  difficulty: QuestionDifficulty;
+  attemptedAt: string;
+}
+
+export interface QuizTopicStats {
+  topicId: string;
+  topicTitle: string;
+  attempts: number;
+  correct: number;
+  accuracy: number;
+}
+
+export interface QuizStatsResponse {
+  totalAttempts: number;
+  correctAttempts: number;
+  accuracy: number | null;
+  byTopic: QuizTopicStats[];
+}
+
 // ─── Mock Exams ───────────────────────────────────────────────────────────────
 
 export type MockExamStatus = "not_started" | "in_progress" | "completed";
@@ -211,6 +276,7 @@ export interface DashboardStats {
 
 export interface StudyTaskItem {
   id: string;
+  topicId: string | null;
   type: TaskType;
   status: TaskStatus;
   scheduledDate: string;
