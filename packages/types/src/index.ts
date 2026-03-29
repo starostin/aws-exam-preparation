@@ -217,6 +217,52 @@ export interface ReviewSchedule {
   updatedAt: string;
 }
 
+export interface FlashcardTopicSummary {
+  topicId: string;
+  topicTitle: string;
+  domainName: string;
+  cardCount: number;
+  dueCount: number;
+}
+
+export interface FlashcardWithReview {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  front: string;
+  back: string;
+  nextReviewAt: string | null;
+  confidence: FlashcardConfidence | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListFlashcardsInput {
+  topicId?: string;
+  certificationId?: string;
+  dueOnly?: boolean;
+}
+
+export interface SubmitReviewInput {
+  flashcardId: string;
+  confidence: FlashcardConfidence;
+}
+
+export interface SubmitReviewResponse {
+  reviewId: string;
+  flashcardId: string;
+  confidence: FlashcardConfidence;
+  nextReviewAt: string;
+  updatedAt: string;
+}
+
+export interface FlashcardStatsResponse {
+  totalCards: number;
+  reviewedCards: number;
+  dueToday: number;
+  averageConfidence: number | null;
+}
+
 // ─── Progress & Readiness ─────────────────────────────────────────────────────
 
 export interface ProgressSnapshot {
@@ -270,6 +316,7 @@ export interface DashboardStats {
   streak: number;
   topicsCompleted: number;
   totalTopics: number;
+  completedTasksTotal: number;
   readinessScore: number | null;
   quizAccuracy: number | null; // 0–1, null if no attempts
 }
@@ -282,6 +329,7 @@ export interface StudyTaskItem {
   scheduledDate: string;
   topicTitle: string | null;
   title: string | null;
+  courseName: string | null;
   externalResourceId: string | null;
   topicResourceUrl: string | null;
   estimatedMinutes: number;

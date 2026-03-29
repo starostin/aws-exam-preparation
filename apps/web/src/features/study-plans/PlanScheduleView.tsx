@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ChevronDown, ExternalLink, GripVertical, Loader2 } from 'lucide-react';
+import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, GripVertical, Loader2, TriangleAlert } from 'lucide-react';
 import { type DragEvent, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,13 @@ import type { StudyMaterialItem } from '@/lib/api/study-plans';
 
 export interface ScheduleTask {
   id: string;
+  topicId: string | null;
   type: string;
   status: string;
   scheduledDate: string;
   topicTitle: string | null;
   title: string | null;
+  courseName: string | null;
   externalResourceId: string | null;
   topicResourceUrl: string | null;
   estimatedMinutes: number;
@@ -167,6 +169,7 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
   const totalTasks = weeks.reduce((sum, w) => sum + w.tasks.length, 0);
   const completedTasks = weeks.reduce((sum, w) => sum + w.tasks.filter((t) => t.status === 'completed').length, 0);
   const inProgressTasks = weeks.reduce((sum, w) => sum + w.tasks.filter((t) => t.status === 'in_progress').length, 0);
+  const missedTasks = weeks.reduce((sum, w) => sum + w.tasks.filter((t) => t.status === 'carried_over').length, 0);
 
   return (
     <div className='space-y-3'>
@@ -183,11 +186,18 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
             <span className='text-amber-600 dark:text-amber-400'>{inProgressTasks} in progress</span>
           </>
         )}
+        {missedTasks > 0 && (
+          <>
+            <span className='text-border'>·</span>
+            <span className='text-rose-600 dark:text-rose-400'>{missedTasks} missed</span>
+          </>
+        )}
       </div>
 
       {weeks.map((week) => {
         const weekCompleted = week.tasks.filter((t) => t.status === 'completed').length;
         const weekInProgress = week.tasks.filter((t) => t.status === 'in_progress').length;
+        const weekMissed = week.tasks.filter((t) => t.status === 'carried_over').length;
         const weekTotal = week.tasks.length;
         const isExpanded = expandedWeeks.has(week.weekNumber);
         const isFullyDone = weekCompleted === weekTotal && weekTotal > 0;
@@ -238,6 +248,12 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                         {weekInProgress} in progress
                       </span>
                     )}
+                    {weekMissed > 0 && (
+                      <span className='flex items-center gap-1 text-rose-600 dark:text-rose-400'>
+                        <TriangleAlert className='h-3 w-3' />
+                        {weekMissed} missed
+                      </span>
+                    )}
                     <span>{weekCompleted}/{weekTotal} done</span>
                   </span>
                 )}
@@ -253,6 +269,7 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                 {sortedDates.map((date) => {
                   const dayTasks = tasksByDate.get(date) ?? [];
                   const isToday = date === today;
+                  const missedOnDay = dayTasks.filter((task) => task.status === 'carried_over').length;
 
                   const dayTotalMinutes = dayTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0);
 
@@ -269,16 +286,43 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                       onDrop={(e) => { void handleDrop(e, date); }}
                     >
                       <div className='mb-2.5 flex items-center justify-between gap-2'>
-                        <p className={cn(
-                          'text-xs font-semibold uppercase tracking-[0.14em]',
-                          isToday ? 'text-cyan-600 dark:text-cyan-400' : 'text-muted-foreground',
-                        )}>
-                          {isToday ? 'Today — ' : ''}{formatDate(date)}
-                        </p>
+                        <div className='flex min-w-0 items-center gap-2'>
+                          <p className={cn(
+                            'text-xs font-semibold uppercase tracking-[0.14em]',
+                            isToday ? 'text-cyan-600 dark:text-cyan-400' : 'text-muted-foreground',
+                          )}>
+                            {isToday ? 'Today — ' : ''}{formatDate(date)}
+                          </p>
+                          {missedOnDay > 0 && (
+                            <Badge variant='outline' className='border-rose-500/40 text-[10px] uppercase tracking-[0.14em] text-rose-700 dark:text-rose-300'>
+                              {missedOnDay} missed
+                            </Badge>
+                          )}
+                        </div>
                         <span className='shrink-0 text-xs text-muted-foreground'>{formatMinutes(dayTotalMinutes)}</span>
                       </div>
-                      <div className='space-y-2'>
-                        {dayTasks.map((task) => {
+                      <div className='space-y-3'>
+                        {(() => {
+                          // Group tasks by topicId so the user sees which topic each cluster belongs to
+                          const topicGroups: { topicId: string | null; topicTitle: string | null; tasks: ScheduleTask[] }[] = [];
+                          for (const task of dayTasks) {
+                            const last = topicGroups[topicGroups.length - 1];
+                            if (last && last.topicId === task.topicId) {
+                              last.tasks.push(task);
+                            } else {
+                              topicGroups.push({ topicId: task.topicId, topicTitle: task.topicTitle, tasks: [task] });
+                            }
+                          }
+                          const showTopicLabels = true;
+                          return topicGroups.map((group, groupIdx) => (
+                            <div key={group.topicId ?? `intro-${groupIdx}`} className='space-y-2'>
+                              {showTopicLabels && (
+                                <div className='flex items-center gap-1.5 pt-0.5'>
+                                  <BookOpen className='h-3 w-3 shrink-0 text-muted-foreground/60' />
+                                  <span className='text-[11px] font-medium text-muted-foreground/80 truncate'>{group.topicTitle ?? 'Introduction & General'}</span>
+                                </div>
+                              )}
+                              {group.tasks.map((task) => {
                           const material = task.externalResourceId
                             ? materialById.get(task.externalResourceId)
                             : task.type === 'quiz' && task.topicTitle
@@ -287,6 +331,7 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                           const typeColorClass = TYPE_COLORS[task.type] ?? 'bg-muted text-muted-foreground';
                           const isCompleted = task.status === 'completed';
                           const isInProgress = task.status === 'in_progress';
+                          const isMissed = task.status === 'carried_over';
 
                           return (
                             <div
@@ -295,58 +340,78 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                               onDragStart={() => { handleDragStart(task.id, date); }}
                               onDragEnd={handleDragEnd}
                               className={cn(
-                                'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-opacity',
+                                'flex items-center justify-between rounded-lg border px-3 py-2 transition-opacity',
                                 !!onReschedule && 'cursor-grab active:cursor-grabbing',
                                 draggingTaskId === task.id && 'opacity-40',
                                 isCompleted
                                   ? 'border-emerald-500/30 bg-emerald-500/5'
                                   : isInProgress
                                     ? 'border-amber-500/30 bg-amber-500/5'
+                                    : isMissed
+                                      ? 'border-rose-500/30 bg-rose-500/5'
                                     : 'border-border/50 bg-background/50',
                               )}
                             >
-                              {/* Left: drag handle + icon + title + tags */}
-                              <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
-                                {!!onReschedule && (
-                                  <GripVertical className='h-4 w-4 shrink-0 text-muted-foreground/40' />
-                                )}
-                                {isCompleted && (
-                                  <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-emerald-500' />
-                                )}
-                                {isInProgress && (
-                                  <Loader2 className='h-3.5 w-3.5 shrink-0 text-amber-500' />
-                                )}
-                                <span
-                                  className={cn(
-                                    'min-w-0 truncate text-sm font-medium',
-                                    isCompleted && 'text-muted-foreground line-through decoration-muted-foreground/40',
-                                    isInProgress && 'text-amber-700 dark:text-amber-300',
-                                  )}
-                                >
-                                  {task.title ?? task.topicTitle ?? TYPE_LABELS[task.type] ?? task.type}
-                                </span>
+                              {/* Drag handle */}
+                              {!!onReschedule && (
+                                <GripVertical className='h-4 w-4 shrink-0 self-center text-muted-foreground/40' />
+                              )}
 
-                                {/* Type tag */}
-                                <Badge className={cn('shrink-0 text-xs', typeColorClass)}>
-                                  {TYPE_LABELS[task.type] ?? task.type}
-                                </Badge>
+                              {/* Status icon — spans full height of the card */}
+                              <div className='flex shrink-0 self-stretch items-center'>
+                                {isCompleted && <CheckCircle2 className='h-3.5 w-3.5 text-emerald-500' />}
+                                {isInProgress && <Loader2 className='h-3.5 w-3.5 text-amber-500' />}
+                                {isMissed && <TriangleAlert className='h-3.5 w-3.5 text-rose-500' />}
+                                {!isCompleted && !isInProgress && !isMissed && <span className='h-3.5 w-3.5' />}
+                              </div>
 
-                                {/* Free / Paid tag */}
-                                {material !== undefined && (
-                                  <Badge
-                                    variant='outline'
+                              {/* Left: title + tags */}
+                              <div className='min-w-0 flex-1'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                  <span
                                     className={cn(
-                                      'shrink-0 text-xs',
-                                      material.isFree
-                                        ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
-                                        : 'border-amber-500/40 text-amber-600 dark:text-amber-400',
+                                      'min-w-0 truncate text-sm font-medium',
+                                      isCompleted && 'text-muted-foreground line-through decoration-muted-foreground/40',
+                                      isInProgress && 'text-amber-700 dark:text-amber-300',
+                                      isMissed && 'text-rose-700 dark:text-rose-300',
                                     )}
                                   >
-                                    {material.isFree ? 'Free' : 'Paid'}
-                                  </Badge>
-                                )}
+                                    {task.title ?? task.topicTitle ?? TYPE_LABELS[task.type] ?? task.type}
+                                  </span>
+                                  {task.courseName && (
+                                    <span className='min-w-0 truncate text-xs text-muted-foreground/70'>{task.courseName}</span>
+                                  )}
+                                </div>
 
-                                <span className='text-xs text-muted-foreground'>{task.estimatedMinutes}m</span>
+                                <div className='mt-2 flex flex-wrap items-center gap-1.5'>
+                                  {isMissed && (
+                                    <Badge variant='outline' className='shrink-0 border-rose-500/40 text-xs text-rose-700 dark:text-rose-300'>
+                                      Missed
+                                    </Badge>
+                                  )}
+
+                                  {/* Type tag */}
+                                  <Badge className={cn('shrink-0 text-xs', typeColorClass)}>
+                                    {TYPE_LABELS[task.type] ?? task.type}
+                                  </Badge>
+
+                                  {/* Free / Paid tag */}
+                                  {material !== undefined && (
+                                    <Badge
+                                      variant='outline'
+                                      className={cn(
+                                        'shrink-0 text-xs',
+                                        material.isFree
+                                          ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                                          : 'border-amber-500/40 text-amber-600 dark:text-amber-400',
+                                      )}
+                                    >
+                                      {material.isFree ? 'Free' : 'Paid'}
+                                    </Badge>
+                                  )}
+
+                                  <span className='text-xs text-muted-foreground'>{task.estimatedMinutes}m</span>
+                                </div>
                               </div>
 
                               {/* Right: rescheduling indicator + link */}
@@ -354,7 +419,7 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                                 {rescheduling.has(task.id) && (
                                   <Loader2 className='h-3.5 w-3.5 animate-spin text-muted-foreground' />
                                 )}
-                                {(material?.url ?? task.topicResourceUrl) && (
+                                {(material?.url ?? task.topicResourceUrl) && task.type !== 'quiz' && task.type !== 'flashcard' && (
                                   <Button asChild size='sm' className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
                                     <a href={material?.url ?? task.topicResourceUrl!} target='_blank' rel='noreferrer'>
                                       <ExternalLink className='h-3.5 w-3.5' />
@@ -365,6 +430,9 @@ export function PlanScheduleView({ weeks, materials, onReschedule }: Props) {
                             </div>
                           );
                         })}
+                            </div>
+                          ));
+                        })()}
                       </div>
                     </div>
                   );

@@ -85,6 +85,7 @@ export const studyTasks = pgTable('study_tasks', {
   status: taskStatusEnum('status').notNull().default('pending'),
   scheduledDate: date('scheduled_date').notNull(),
   plannedMinutes: integer('planned_minutes'),
+  sortOrder: integer('sort_order'),
   completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

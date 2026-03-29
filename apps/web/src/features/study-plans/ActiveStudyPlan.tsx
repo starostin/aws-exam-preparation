@@ -58,10 +58,11 @@ export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: Acti
     day: 'numeric',
   });
 
+
   return (
     <Card className='border-border/70 bg-card/80'>
-      {/* Always-visible single row */}
-      <div className='flex flex-wrap items-center justify-between gap-3 px-5 py-3'>
+      {/* Collapsed card header style for consistency */}
+      <div className='px-5 py-3 flex flex-row items-center justify-between gap-3'>
         <button
           type='button'
           onClick={() => setExpanded((v) => !v)}
@@ -81,29 +82,29 @@ export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: Acti
             className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
           />
         </button>
-
-        <Button
-          variant='outline'
-          size='sm'
-          className='shrink-0 gap-2 border-border bg-background/70'
-          onClick={() => setDetailsOpen(true)}
-        >
-          <FileText className='h-4 w-4' />
-          Details
-        </Button>
-
-        {onReset && (
+        <div className='flex items-center gap-2'>
           <Button
-            variant='destructive'
+            variant='outline'
             size='sm'
-            className='shrink-0 gap-2'
-            disabled={isResetting}
-            onClick={onReset}
+            className='shrink-0 gap-2 border-border bg-background/70'
+            onClick={() => setDetailsOpen(true)}
           >
-            <RotateCcw className='h-4 w-4' />
-            {isResetting ? 'Resetting...' : 'Reset Plan'}
+            <FileText className='h-4 w-4' />
+            Details
           </Button>
-        )}
+          {onReset && (
+            <Button
+              variant='destructive'
+              size='sm'
+              className='shrink-0 gap-2'
+              disabled={isResetting}
+              onClick={onReset}
+            >
+              <RotateCcw className='h-4 w-4' />
+              {isResetting ? 'Resetting...' : 'Reset Plan'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Expandable details */}

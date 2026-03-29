@@ -216,6 +216,7 @@ export interface DashboardStats {
     streak: number;
     topicsCompleted: number;
     totalTopics: number;
+    completedTasksTotal: number;
     readinessScore: number | null;
     quizAccuracy: number | null;
 }
@@ -227,6 +228,7 @@ export interface StudyTaskItem {
     scheduledDate: string;
     topicTitle: string | null;
     title: string | null;
+    courseName: string | null;
     externalResourceId: string | null;
     topicResourceUrl: string | null;
     estimatedMinutes: number;

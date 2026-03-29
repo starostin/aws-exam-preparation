@@ -12,8 +12,11 @@ import {
   type SeedResource,
   type SeedTopic,
 } from './data/saa-c03-materials';
+import { WAF_CATALOG } from './data/saa-c03-well-architected';
+import { TD_CATALOG } from './data/saa-c03-tutorials-dojo';
 import { SAA_STUDY_PLANS } from './data/saa-c03-study-plans';
 import { SAA_QUIZ_QUESTIONS, type SeedQuizQuestion } from './data/saa-c03-quizzes';
+import { SAA_FLASHCARDS, type SeedFlashcard } from './data/saa-c03-flashcards';
 
 type CertificationRow = typeof schema.certifications.$inferSelect;
 type DomainRow = typeof schema.domains.$inferSelect;
@@ -255,6 +258,35 @@ async function upsertResource(
   });
 }
 
+async function upsertFlashcard(
+  db: ReturnType<typeof drizzle>,
+  topicId: string,
+  card: SeedFlashcard,
+): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(schema.flashcards)
+    .where(and(eq(schema.flashcards.topicId, topicId), eq(schema.flashcards.front, card.front)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(schema.flashcards)
+      .set({
+        back: card.back,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.flashcards.id, existing.id));
+    return;
+  }
+
+  await db.insert(schema.flashcards).values({
+    topicId,
+    front: card.front,
+    back: card.back,
+  });
+}
+
 async function upsertQuizQuestion(
   db: ReturnType<typeof drizzle>,
   topicId: string,
@@ -321,7 +353,44 @@ async function runSeed(): Promise<void> {
 
     await clearResourcesForCertification(db, certification.id);
 
-    for (const resource of SAA_RESOURCES) {
+    // For WAF and TD, resource.title = collection.resourceTitle so the study-plan
+    // template resolver (resourceByTitle map) and the service section-title lookup
+    // both work. The per-section display title is resolved at scheduling time.
+    const SAA_WAF_RESOURCES: SeedResource[] = WAF_CATALOG.flatMap(collection =>
+      collection.sections.map(section => ({
+        title: collection.resourceTitle,
+        description: section.description,
+        url: section.url,
+        type: collection.type,
+        priority: collection.priority,
+        isFree: collection.isFree,
+        provider: collection.provider,
+        level: collection.level,
+        tags: section.tags,
+        estimatedMinutes: section.estimatedMinutes,
+        topicSlug: section.topicSlug,
+      }))
+    );
+
+    const SAA_TD_RESOURCES: SeedResource[] = TD_CATALOG.flatMap(collection =>
+      collection.sections.map(section => ({
+        title: collection.resourceTitle,
+        description: section.description,
+        url: section.url,
+        type: collection.type,
+        priority: collection.priority,
+        isFree: collection.isFree,
+        provider: collection.provider,
+        level: collection.level,
+        tags: section.tags,
+        estimatedMinutes: section.estimatedMinutes,
+        topicSlug: section.topicSlug,
+      }))
+    );
+
+    const allSeedResources: SeedResource[] = [...SAA_RESOURCES, ...SAA_WAF_RESOURCES, ...SAA_TD_RESOURCES];
+
+    for (const resource of allSeedResources) {
       const topicId = resource.topicSlug ? topicIdBySlug.get(resource.topicSlug) ?? null : null;
 
       if (resource.topicSlug && !topicId) {
@@ -339,9 +408,17 @@ async function runSeed(): Promise<void> {
       await upsertQuizQuestion(db, topicId, question);
     }
 
+    for (const card of SAA_FLASHCARDS) {
+      const topicId = topicIdBySlug.get(card.topicSlug);
+      if (!topicId) {
+        throw new Error(`Missing topic for flashcard (topicSlug: ${card.topicSlug})`);
+      }
+      await upsertFlashcard(db, topicId, card);
+    }
+
     // Keep output concise for CI/local usage while still showing seed coverage.
     // eslint-disable-next-line no-console
-    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${SAA_RESOURCES.length} resources, ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions.`);
+    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${allSeedResources.length} resources (${SAA_RESOURCES.length} core + ${SAA_WAF_RESOURCES.length} WAF + ${SAA_TD_RESOURCES.length} TD cheat sheets), ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions, ${SAA_FLASHCARDS.length} flashcards.`);
   } finally {
     await pool.end();
   }

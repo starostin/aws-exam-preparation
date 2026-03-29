@@ -918,5 +918,93 @@ export const SAA_QUIZ_QUESTIONS: SeedQuizQuestion[] = [
       { id: 'd', text: 'VPC Lattice', isCorrect: false },
     ],
     explanation: 'EFA is a network interface for Amazon EC2 instances that enables customers to run HPC applications requiring high levels of inter-node communication at scale on AWS. It provides lower and more consistent latency than traditional TCP/IP.',
-  }
+  },
+
+  // ─── Domain 2: Machine Learning & AI Services ────────────────────────────
+
+  // Topic: machine-learning-and-ai-services
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'easy',
+    text: 'A media company wants to automatically moderate user-uploaded images and flag any content that is violent or sexually explicit — without building a custom machine learning model. Which AWS service is MOST appropriate?',
+    options: [
+      { id: 'a', text: 'Amazon SageMaker with a custom image classification model', isCorrect: false },
+      { id: 'b', text: 'Amazon Rekognition Content Moderation', isCorrect: true },
+      { id: 'c', text: 'Amazon Comprehend Sentiment Analysis', isCorrect: false },
+      { id: 'd', text: 'Amazon Textract with a custom classifier', isCorrect: false },
+    ],
+    explanation: 'Amazon Rekognition provides a managed Content Moderation API that detects explicit or suggestive adult content, violence, and other unsafe content in images and videos with a single API call. No ML model training is required. Comprehend processes text, not images. SageMaker and Textract require building or training custom pipelines.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'easy',
+    text: 'A call center wants to automatically convert recorded customer support calls (stored in S3 as audio files) into searchable text transcripts. Which AWS service should be used?',
+    options: [
+      { id: 'a', text: 'Amazon Polly', isCorrect: false },
+      { id: 'b', text: 'Amazon Lex', isCorrect: false },
+      { id: 'c', text: 'Amazon Transcribe', isCorrect: true },
+      { id: 'd', text: 'Amazon Comprehend', isCorrect: false },
+    ],
+    explanation: 'Amazon Transcribe is a Speech-to-Text service that converts audio into written text. It supports batch transcription of audio files from S3 and includes features for speaker identification, custom vocabularies, and automatic punctuation — all well-suited for call center analytics. Polly is the reverse (Text-to-Speech). Lex builds conversational chatbots. Comprehend analyzes existing text, not audio.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'medium',
+    text: 'A company wants to add a natural language question-answering capability to its internal HR portal, so employees can ask questions like "What is the parental leave policy?" and receive a direct answer extracted from HR policy documents stored in SharePoint. Which AWS service is BEST suited?',
+    options: [
+      { id: 'a', text: 'Amazon Comprehend with custom document classification', isCorrect: false },
+      { id: 'b', text: 'Amazon Kendra', isCorrect: true },
+      { id: 'c', text: 'Amazon Lex with a Lambda fulfillment function', isCorrect: false },
+      { id: 'd', text: 'Amazon OpenSearch Service with a keyword index', isCorrect: false },
+    ],
+    explanation: 'Amazon Kendra is an intelligent enterprise search service that understands natural language and returns precise passages from connected document sources (including SharePoint). Unlike keyword search (OpenSearch) or a rule-based chatbot (Lex), Kendra finds the specific answer within the document rather than returning a list of matching documents. Comprehend classifies and analyses existing text but does not drive document search.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'medium',
+    text: 'A retail company has 5 years of daily sales data across thousands of products and wants to predict inventory demand for the next 3 months. They have no machine learning engineers. Which AWS service is MOST appropriate?',
+    options: [
+      { id: 'a', text: 'Amazon SageMaker with a custom LSTM model', isCorrect: false },
+      { id: 'b', text: 'Amazon Forecast', isCorrect: true },
+      { id: 'c', text: 'Amazon Bedrock with a generative AI model', isCorrect: false },
+      { id: 'd', text: 'Amazon QuickSight ML Insights', isCorrect: false },
+    ],
+    explanation: 'Amazon Forecast is purpose-built for time-series forecasting. You provide historical data and related metadata; Forecast automatically trains and selects the best-performing model and produces probabilistic predictions — no ML expertise required. SageMaker requires building and training a custom model. Bedrock is for generative AI tasks, not time-series forecasting. QuickSight ML Insights provides anomaly detection and forecasting within dashboards but lacks the dedicated data ingestion and model selection pipeline of Forecast.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'medium',
+    text: 'A fintech startup wants to build a generative AI feature that allows customers to describe a financial transaction in natural language and receive a categorized summary. The team wants to avoid managing any ML infrastructure and pay only per API call. Which approach is BEST?',
+    options: [
+      { id: 'a', text: 'Train a custom NLP model on Amazon SageMaker and host it on a SageMaker endpoint', isCorrect: false },
+      { id: 'b', text: 'Use Amazon Bedrock to invoke a foundation model (e.g., Claude or Amazon Titan) via the InvokeModel API', isCorrect: true },
+      { id: 'c', text: 'Deploy an open-source LLM on EC2 GPU instances', isCorrect: false },
+      { id: 'd', text: 'Use Amazon Comprehend entity detection for transaction categorization', isCorrect: false },
+    ],
+    explanation: 'Amazon Bedrock is a serverless generative AI service that provides access to powerful foundation models via a simple API. There is no infrastructure to provision or manage, and pricing is per-token. This directly meets the requirements. SageMaker would require building, training, and hosting a custom model — adding significant ML complexity. Self-hosting an LLM on EC2 maximizes control but also maximizes operational overhead. Comprehend can detect entities but cannot generate categorized narrative summaries.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'hard',
+    text: 'A healthcare company wants to extract structured data (patient name, date of birth, diagnosis codes) from scanned PDF medical forms uploaded to S3, then store the results in DynamoDB. The forms have varied layouts and include both printed and handwritten fields. Which AWS service pipeline achieves this with the LEAST custom development effort?',
+    options: [
+      { id: 'a', text: 'Amazon Rekognition text detection → Lambda to parse → DynamoDB', isCorrect: false },
+      { id: 'b', text: 'Amazon Textract (AnalyzeDocument with FORMS and QUERIES) → Lambda to transform → DynamoDB', isCorrect: true },
+      { id: 'c', text: 'Amazon Comprehend Medical → Lambda to extract → DynamoDB', isCorrect: false },
+      { id: 'd', text: 'SageMaker custom OCR model → Lambda to transform → DynamoDB', isCorrect: false },
+    ],
+    explanation: 'Amazon Textract is specifically designed to extract text and structured data (key-value pairs from forms, table cells) from scanned documents — including handwritten content — without requiring a custom ML model. The FORMS and QUERIES feature types can identify named fields like "Patient Name" regardless of layout variations. Rekognition text detection extracts raw text but does not understand document structure (forms, tables). Comprehend Medical analyses existing text for clinical entities but does not perform OCR or extract structured form data. SageMaker requires building and training a custom model, adding significant development effort.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    difficulty: 'hard',
+    text: 'A company already has 50,000 labeled customer support emails categorized into 12 support types. They want to automatically classify incoming emails at low latency without managing infrastructure. Which approach requires the LEAST operational overhead while meeting this requirement?',
+    options: [
+      { id: 'a', text: 'Train an Amazon Bedrock custom model using the labeled emails as fine-tuning data', isCorrect: false },
+      { id: 'b', text: 'Use Amazon Comprehend Custom Classification, train on the labeled dataset, and deploy as a real-time endpoint', isCorrect: true },
+      { id: 'c', text: 'Build and train a custom BERT model on SageMaker and host it behind a SageMaker real-time endpoint', isCorrect: false },
+      { id: 'd', text: 'Use Amazon Kendra with a custom FAQ list for each support category', isCorrect: false },
+    ],
+    explanation: 'Amazon Comprehend Custom Classification allows you to provide labeled training examples and automatically trains a text classification model without requiring ML expertise or infrastructure management. The resulting classifier can be deployed as a real-time endpoint for low-latency predictions. Bedrock supports fine-tuning for generative tasks but is not designed for multi-class document classification. SageMaker with custom BERT gives more control but requires writing training code, managing compute, and deploying the endpoint — significantly higher operational overhead. Kendra is for document search and Q&A, not classification.',
+  },
 ];

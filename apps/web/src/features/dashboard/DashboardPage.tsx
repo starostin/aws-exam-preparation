@@ -61,6 +61,7 @@ export function DashboardPage() {
     setIsResetting(true);
     try {
       await resetStudyPlan(token);
+      window.dispatchEvent(new Event('study-plan-reset'));
       setDashboard(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset study plan');

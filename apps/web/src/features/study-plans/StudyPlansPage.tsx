@@ -119,6 +119,7 @@ export function StudyPlansPage() {
     setResetMessage(null);
     try {
       await resetStudyPlan(token);
+      window.dispatchEvent(new Event('study-plan-reset'));
       setResetMessage('Study plan reset. Set up a new one below.');
       await new Promise((resolve) => setTimeout(resolve, 1200));
       setDashboard(null);
@@ -149,7 +150,10 @@ export function StudyPlansPage() {
     const [refreshed, refreshedSchedule] = await Promise.all([fetchDashboard(token), fetchPlanSchedule(token)]);
     setDashboard(refreshed);
     setSchedule(refreshedSchedule);
+    window.dispatchEvent(new Event('tasks-rescheduled'));
   }
+
+  const [carriedOverExpanded, setCarriedOverExpanded] = useState(false);
 
   if (isLoading) {
     return <p className='text-sm text-muted-foreground'>Loading study plans...</p>;
@@ -192,6 +196,39 @@ export function StudyPlansPage() {
             token={token}
           />
 
+          {token && dashboard && dashboard.carryOverTasks.length > 0 && (
+            <Card className='border-rose-500/25 bg-rose-500/5'>
+              <button
+                type='button'
+                className='flex w-full min-w-0 items-center gap-3 px-5 py-3 text-left'
+                onClick={() => setCarriedOverExpanded((v) => !v)}
+                aria-expanded={carriedOverExpanded}
+              >
+                <span className='text-sm font-semibold text-foreground'>Carried Over</span>
+                <span className='flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground'>
+                  <span>{dashboard.carryOverTasks.length} missed task{dashboard.carryOverTasks.length !== 1 ? 's' : ''}</span>
+                </span>
+                <span className='shrink-0 text-xs text-muted-foreground'>
+                  {dashboard.carryOverTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)} min
+                </span>
+                <ChevronDown className={cn('h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200', carriedOverExpanded && 'rotate-180')} />
+              </button>
+              {carriedOverExpanded && (
+                <CardContent className='pt-0'>
+                  <TaskList
+                    todaysTasks={[]}
+                    carryOverTasks={dashboard.carryOverTasks}
+                    token={token}
+                    materials={planMaterials}
+                    onStatusChanged={handleTaskStatusChanged}
+                    showOverview={false}
+                    carryOverAlwaysExpanded
+                  />
+                </CardContent>
+              )}
+            </Card>
+          )}
+
           {/* Today's tasks — main content */}
           <Card className='border-border/70 bg-card/70'>
             <CardHeader className='pb-4'>
@@ -201,7 +238,7 @@ export function StudyPlansPage() {
               {token && dashboard && (
                 <TaskList
                   todaysTasks={dashboard.todaysTasks}
-                  carryOverTasks={dashboard.carryOverTasks}
+                  carryOverTasks={[]}
                   token={token}
                   materials={planMaterials}
                   onStatusChanged={handleTaskStatusChanged}
@@ -212,44 +249,40 @@ export function StudyPlansPage() {
 
           {/* Full course schedule */}
           <Card className='border-border/70 bg-card/70'>
-            <CardHeader className='px-5 py-3'>
-              <button
-                type='button'
-                onClick={() => { setScheduleExpanded((v) => !v); }}
-                className='flex w-full items-center justify-between gap-3 text-left'
-              >
-                <div className='flex flex-wrap items-center gap-x-4 gap-y-1'>
-                  <CardTitle className='text-xl text-foreground'>Full Course Schedule</CardTitle>
-                  {!scheduleExpanded && schedule && (() => {
-                    const weeks = schedule.weeks;
-                    const totalTasks = weeks.reduce((s, w) => s + w.tasks.length, 0);
-                    const completedTasks = weeks.reduce((s, w) => s + w.tasks.filter((t) => t.status === 'completed').length, 0);
-                    const inProgressTasks = weeks.reduce((s, w) => s + w.tasks.filter((t) => t.status === 'in_progress').length, 0);
-                    return (
-                      <span className='flex items-center gap-2 text-sm text-muted-foreground'>
-                        <span>{weeks.length} week{weeks.length !== 1 ? 's' : ''}</span>
+            <button
+              type='button'
+              onClick={() => { setScheduleExpanded((v) => !v); }}
+              className='flex w-full min-w-0 items-center gap-3 px-5 py-3 text-left'
+            >
+              <span className='text-sm font-semibold text-foreground'>Full Course Schedule</span>
+              {schedule && (() => {
+                const weeks = schedule.weeks;
+                const totalTasks = weeks.reduce((s, w) => s + w.tasks.length, 0);
+                const completedTasks = weeks.reduce((s, w) => s + w.tasks.filter((t) => t.status === 'completed').length, 0);
+                const inProgressTasks = weeks.reduce((s, w) => s + w.tasks.filter((t) => t.status === 'in_progress').length, 0);
+                return (
+                  <span className='flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground'>
+                    <span>{weeks.length} week{weeks.length !== 1 ? 's' : ''}</span>
+                    <span className='text-border'>·</span>
+                    <span>{totalTasks} tasks</span>
+                    <span className='text-border'>·</span>
+                    <span className='text-emerald-600 dark:text-emerald-400'>{completedTasks} completed</span>
+                    {inProgressTasks > 0 && (
+                      <>
                         <span className='text-border'>·</span>
-                        <span>{totalTasks} tasks</span>
-                        <span className='text-border'>·</span>
-                        <span className='text-emerald-600 dark:text-emerald-400'>{completedTasks} completed</span>
-                        {inProgressTasks > 0 && (
-                          <>
-                            <span className='text-border'>·</span>
-                            <span className='text-amber-600 dark:text-amber-400'>{inProgressTasks} in progress</span>
-                          </>
-                        )}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <ChevronDown
-                  className={cn(
-                    'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200',
-                    scheduleExpanded && 'rotate-180',
-                  )}
-                />
-              </button>
-            </CardHeader>
+                        <span className='text-amber-600 dark:text-amber-400'>{inProgressTasks} in progress</span>
+                      </>
+                    )}
+                  </span>
+                );
+              })()}
+              <ChevronDown
+                className={cn(
+                  'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200',
+                  scheduleExpanded && 'rotate-180',
+                )}
+              />
+            </button>
             {scheduleExpanded && (
               <CardContent>
                 <PlanScheduleView

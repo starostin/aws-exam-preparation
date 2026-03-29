@@ -197,6 +197,7 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
         dailyHours: template.recommendedDailyHours,
         selectedMaterialIds: template.selectedMaterialIds,
       }, token);
+      window.dispatchEvent(new Event('study-plan-created'));
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create study plan');

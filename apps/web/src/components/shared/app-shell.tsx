@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BookOpen, CalendarClock, ClipboardList, HelpCircle, LayoutDashboard, LogOut, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BookOpen, CalendarClock, CheckCheck, ClipboardList, HelpCircle, LayoutDashboard, Layers, LogOut } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { fetchDashboard } from '@/lib/api/study-plans';
 import { cn } from '@/lib/utils';
 import { signOutCurrentUser } from '@/lib/auth/auth-service';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
@@ -28,6 +29,24 @@ export function AppShell({ children }: AppShellProps) {
   const [email, setEmail] = useState<string | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [todayTaskCount, setTodayTaskCount] = useState<number | null>(null);
+  const [missedTaskCount, setMissedTaskCount] = useState<number | null>(null);
+  const [completedTaskCount, setCompletedTaskCount] = useState<number | null>(null);
+
+  const fetchBadgeCounts = useCallback(async () => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) return;
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) return;
+    try {
+      const dashboard = await fetchDashboard(accessToken);
+      setTodayTaskCount(dashboard.todaysTasks.length);
+      setMissedTaskCount(dashboard.carryOverTasks.length);
+      setCompletedTaskCount(Number(dashboard.stats.completedTasksTotal));
+    } catch {
+      // Ignore
+    }
+  }, [supabase]);
 
   useEffect(() => {
     if (isAuthPath(pathname)) {
@@ -49,14 +68,63 @@ export function AppShell({ children }: AppShellProps) {
 
       setEmail(data.user?.email ?? null);
       setLoadingUser(false);
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (!isMounted || sessionError) return;
+
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return;
+
+      try {
+        const dashboard = await fetchDashboard(accessToken);
+        if (!isMounted) return;
+
+        setTodayTaskCount(dashboard.todaysTasks.length);
+        setMissedTaskCount(dashboard.carryOverTasks.length);
+        setCompletedTaskCount(Number(dashboard.stats.completedTasksTotal));
+      } catch {
+        // Keep header available even if dashboard data is temporarily unavailable.
+      }
     }
 
     void loadUser();
 
+    function handleStudyPlanReset(): void {
+      setTodayTaskCount(0);
+      setMissedTaskCount(0);
+      setCompletedTaskCount(0);
+    }
+
+    function handleStudyPlanCreated(): void {
+      void fetchBadgeCounts();
+    }
+
+    function handleTasksRescheduled(): void {
+      void fetchBadgeCounts();
+    }
+
+    function handleTaskStatusChanged(e: Event): void {
+      const { from, to } = (e as CustomEvent<{ from: string; to: string }>).detail;
+      if (to === 'completed') {
+        setCompletedTaskCount((prev) => (prev ?? 0) + 1);
+      } else if (from === 'completed') {
+        setCompletedTaskCount((prev) => Math.max(0, (prev ?? 0) - 1));
+      }
+    }
+
+    window.addEventListener('study-plan-reset', handleStudyPlanReset);
+    window.addEventListener('study-plan-created', handleStudyPlanCreated);
+    window.addEventListener('tasks-rescheduled', handleTasksRescheduled);
+    window.addEventListener('task-status-changed', handleTaskStatusChanged);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('study-plan-reset', handleStudyPlanReset);
+      window.removeEventListener('study-plan-created', handleStudyPlanCreated);
+      window.removeEventListener('tasks-rescheduled', handleTasksRescheduled);
+      window.removeEventListener('task-status-changed', handleTaskStatusChanged);
     };
-  }, [pathname, supabase]);
+  }, [pathname, supabase, fetchBadgeCounts]);
 
   async function handleSignOut(): Promise<void> {
     setError(null);
@@ -82,11 +150,12 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  const navItems: Array<{ href: '/' | '/study-plans' | '/materials' | '/quizzes'; label: string; icon: LucideIcon }> = [
+  const navItems: Array<{ href: '/' | '/study-plans' | '/materials' | '/quizzes' | '/flashcards'; label: string; icon: LucideIcon }> = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/study-plans', label: 'Study Plans', icon: ClipboardList },
     { href: '/materials', label: 'Study Materials', icon: BookOpen },
     { href: '/quizzes', label: 'Quizzes', icon: HelpCircle },
+    { href: '/flashcards', label: 'Flashcards', icon: Layers },
   ];
 
   return (
@@ -128,6 +197,7 @@ export function AppShell({ children }: AppShellProps) {
               <p>Mock Exams</p>
               <p>Progress</p>
             </div>
+
           </nav>
 
           <div className='mt-auto rounded-xl border border-border bg-background/60 p-4'>
@@ -139,15 +209,25 @@ export function AppShell({ children }: AppShellProps) {
         <div className='flex min-w-0 flex-1 flex-col'>
           <header className='border-b border-border/70 bg-card/70 px-4 py-4 sm:px-6'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
-              <div className='flex items-center gap-3'>
-                <Badge className='border-cyan-400/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'>
-                  <Sparkles className='mr-1 h-3.5 w-3.5' />
-                  Focus Session
-                </Badge>
-                <Badge variant='secondary'>
-                  <CalendarClock className='mr-1 h-3.5 w-3.5' />
-                  Daily plan
-                </Badge>
+              <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
+
+                <div className='inline-flex items-center overflow-hidden rounded-xl border border-border/70 bg-background/70'>
+                  <span className='flex items-center gap-1.5 border-r border-cyan-500/25 px-2.5 py-1.5 text-xs font-medium text-cyan-700 dark:text-cyan-200'>
+                    <ClipboardList className='h-3.5 w-3.5' />
+                    <span className='hidden sm:inline'>Today</span>
+                    <span>{todayTaskCount ?? '...'}</span>
+                  </span>
+                  <span className='flex items-center gap-1.5 border-r border-rose-500/25 px-2.5 py-1.5 text-xs font-medium text-rose-700 dark:text-rose-300'>
+                    <CalendarClock className='h-3.5 w-3.5' />
+                    <span className='hidden sm:inline'>Missed</span>
+                    <span>{missedTaskCount ?? '...'}</span>
+                  </span>
+                  <span className='flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300'>
+                    <CheckCheck className='h-3.5 w-3.5' />
+                    <span className='hidden sm:inline'>Done</span>
+                    <span>{completedTaskCount ?? '...'}</span>
+                  </span>
+                </div>
               </div>
 
               <div className='flex items-center gap-2'>
