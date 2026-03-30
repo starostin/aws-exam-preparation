@@ -48,6 +48,25 @@ export async function createStudyPlan(input: CreateStudyPlanInput, token: string
   return apiClient.post<{ id: string }>('/v1/study-plans', input, { token });
 }
 
+export interface PreviewDetailsSummary {
+  totals: { flashcards: number; quizzes: number; mockExams: number; practiceTests: number };
+  weeksSummary: {
+    weekNumber: number;
+    startDate: string;
+    endDate: string;
+    description: string;
+    flashcards: number;
+    quizzes: number;
+    mockExams: number;
+    practiceTests: number;
+    materials: { externalResourceId: string; title: string; type: string }[];
+  }[];
+}
+
+export async function previewSchedule(input: CreateStudyPlanInput, token: string): Promise<PreviewDetailsSummary> {
+  return apiClient.post<PreviewDetailsSummary>('/v1/study-plans/preview', input, { token });
+}
+
 export async function resetStudyPlan(token: string): Promise<{ message: string }> {
   return apiClient.patch<{ message: string }>('/v1/study-plans/me/reset', {}, { token });
 }

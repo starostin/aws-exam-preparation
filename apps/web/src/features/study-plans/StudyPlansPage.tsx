@@ -23,6 +23,8 @@ interface WeeklyDetailsSummary {
   flashcards: number;
   quizzes: number;
   mockExams: number;
+  practiceTests: number;
+  materials: Array<{ externalResourceId: string; title: string; type: string }>;
 }
 
 interface PlanDetailsSummary {
@@ -30,6 +32,7 @@ interface PlanDetailsSummary {
     flashcards: number;
     quizzes: number;
     mockExams: number;
+    practiceTests: number;
   };
   weeksSummary: WeeklyDetailsSummary[];
 }

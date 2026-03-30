@@ -3,7 +3,8 @@
 import { format } from 'date-fns';
 import { CheckCircle2, ClipboardCheck, Clock4, Copy, Info } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { createStudyPlan, fetchStudyMaterials, fetchStudyPlanTemplates } from '@/lib/api/study-plans';
+import { createStudyPlan, fetchStudyMaterials, fetchStudyPlanTemplates, previewSchedule } from '@/lib/api/study-plans';
+import type { PreviewDetailsSummary } from '@/lib/api/study-plans';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -111,6 +112,8 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailsTemplate, setDetailsTemplate] = useState<StudyPlanTemplate | null>(null);
+  const [previewDetails, setPreviewDetails] = useState<PreviewDetailsSummary | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const today = new Date();
@@ -123,9 +126,7 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
     0,
     ((activeTemplate?.recommendedWeeks ?? customWeeks) * 7) - 1,
   );
-  const effectiveTargetDate = activeTemplate
-    ? addDays(today, targetSpanDays)
-    : addDays(today, targetSpanDays);
+  const effectiveTargetDate = addDays(today, targetSpanDays);
   const effectiveTargetDateStr = effectiveTargetDate ? format(effectiveTargetDate, 'yyyy-MM-dd') : '';
   const effectiveDailyHours = activeTemplate?.recommendedDailyHours ?? customHoursPerDay;
   const daysUntil = effectiveTargetDate ? getDaysUntil(effectiveTargetDate) : 0;
@@ -184,6 +185,44 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
     setError(null);
   }
 
+  async function handleOpenDetails(template: StudyPlanTemplate): Promise<void> {
+    setDetailsTemplate(template);
+    setPreviewDetails(null);
+    setIsLoadingPreview(true);
+    try {
+      const details = await previewSchedule({
+        certificationId,
+        targetDate: format(addDays(new Date(), Math.max(0, template.recommendedWeeks * 7 - 1)), 'yyyy-MM-dd'),
+        dailyHours: template.recommendedDailyHours,
+        selectedMaterialIds: template.selectedMaterialIds,
+      }, token);
+      setPreviewDetails(details);
+    } catch {
+      // If preview fails, the modal will still show — just without the preview data
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }
+
+  async function handleOpenCustomDetails(): Promise<void> {
+    setDetailsTemplate(customVariantTemplate);
+    setPreviewDetails(null);
+    if (!certificationId || !effectiveTargetDateStr) return;
+    setIsLoadingPreview(true);
+    try {
+      const details = await previewSchedule({
+        certificationId,
+        targetDate: effectiveTargetDateStr,
+        dailyHours: customHoursPerDay,
+      }, token);
+      setPreviewDetails(details);
+    } catch {
+      // fallback: template view
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }
+
   async function handleCopy(text: string, id: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -212,8 +251,28 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
 
   async function handleAcceptCustomVariant(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
-    if (!certificationId || !effectiveTargetDateStr || !customVariantTemplate) return;
-    await handleAcceptTemplate(customVariantTemplate);
+    if (!certificationId || !effectiveTargetDateStr) return;
+    // If a matching template exists, use its curated material selection;
+    // otherwise submit without selectedMaterialIds so the backend picks defaults.
+    if (customVariantTemplate) {
+      await handleAcceptTemplate(customVariantTemplate);
+    } else {
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        await createStudyPlan({
+          certificationId,
+          targetDate: effectiveTargetDateStr,
+          dailyHours: customHoursPerDay,
+        }, token);
+        window.dispatchEvent(new Event('study-plan-created'));
+        onCreated();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create study plan');
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
   }
 
   return (
@@ -316,7 +375,7 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                             className='h-7 gap-1 border-cyan-400/40 text-cyan-700 hover:bg-cyan-500/10 dark:text-cyan-200'
                             onClick={(e) => {
                               e.stopPropagation();
-                              setDetailsTemplate(template);
+                              void handleOpenDetails(template);
                             }}
                           >
                             <Info className='h-3.5 w-3.5' />
@@ -442,7 +501,7 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                           size='sm'
                           variant='outline'
                           className='h-7 gap-1 border-cyan-400/40 text-cyan-700 hover:bg-cyan-500/10 dark:text-cyan-200'
-                          onClick={() => setDetailsTemplate(customVariantTemplate)}
+                          onClick={() => void handleOpenCustomDetails()}
                         >
                           <Info className='h-3.5 w-3.5' />
                           Details
@@ -490,6 +549,38 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                   </div>
                 </div>
               )}
+
+              {!isLoadingTemplates && !customVariantTemplate && (
+                <div className='grid gap-3'>
+                  <label className='text-sm font-medium text-foreground'>Your Plan</label>
+                  <div className='rounded-xl border border-cyan-400/60 bg-cyan-500/10 p-4'>
+                    <div className='flex items-start justify-between gap-3'>
+                      <div>
+                        <p className='text-base font-semibold text-foreground'>
+                          {customWeeks === 1 ? '1 week' : `${customWeeks} weeks`} · {customHoursPerDay}h/day · Custom
+                        </p>
+                        <p className='mt-1 text-sm text-muted-foreground'>
+                          The system will build a personalised schedule using the best available study materials for your pace.
+                        </p>
+                      </div>
+                      <Button
+                        type='submit'
+                        size='sm'
+                        className='h-7 shrink-0 gap-1 bg-cyan-400 text-slate-950 hover:bg-cyan-300'
+                        disabled={isSubmitting}
+                      >
+                        <CheckCircle2 className='h-3.5 w-3.5' />
+                        {isSubmitting ? 'Creating...' : 'Create Plan'}
+                      </Button>
+                    </div>
+                    <div className='mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground'>
+                      <span>{customWeeks === 1 ? '1 week' : `${customWeeks} weeks`}</span>
+                      <span>{customHoursPerDay}h/day</span>
+                      <span>{customWeeks * customHoursPerDay * 7}h total</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -529,8 +620,10 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
           <PlanDetailsModal
             template={detailsTemplate}
             materials={materials}
+            detailsSummary={previewDetails}
+            isLoadingPreview={isLoadingPreview}
             open={detailsTemplate !== null}
-            onOpenChange={(open) => { if (!open) setDetailsTemplate(null); }}
+            onOpenChange={(open) => { if (!open) { setDetailsTemplate(null); setPreviewDetails(null); } }}
           />
         </form>
       </CardContent>

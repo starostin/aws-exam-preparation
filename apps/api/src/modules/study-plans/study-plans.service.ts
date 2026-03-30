@@ -97,6 +97,12 @@ export interface WeekSchedule {
   tasks: StudyTaskItem[];
 }
 
+export interface WeekMaterialItem {
+  externalResourceId: string;
+  title: string;
+  type: string;
+}
+
 export interface StudyPlanWeeklyDetails {
   weekNumber: number;
   startDate: string;
@@ -105,6 +111,8 @@ export interface StudyPlanWeeklyDetails {
   flashcards: number;
   quizzes: number;
   mockExams: number;
+  practiceTests: number;
+  materials: WeekMaterialItem[];
 }
 
 export interface StudyPlanDetailsSummary {
@@ -112,6 +120,7 @@ export interface StudyPlanDetailsSummary {
     flashcards: number;
     quizzes: number;
     mockExams: number;
+    practiceTests: number;
   };
   weeksSummary: StudyPlanWeeklyDetails[];
 }
@@ -374,6 +383,151 @@ export class StudyPlansService {
         ),
       );
 
+    // ── 3-9. Build schedule tasks ────────────────────────────────────────────
+    const result = await this.buildScheduleTasks(
+      certificationId,
+      dailyHours,
+      targetDate,
+      selectedMaterialIds,
+      completedMinutesByTopic,
+    );
+
+    // Assign the real studyPlanId and persist
+    for (const task of result.tasks) {
+      task.studyPlanId = studyPlanId;
+    }
+
+    if (result.tasks.length > 0) {
+      await this.db.insert(schema.studyTasks).values(result.tasks);
+    }
+  }
+
+  // ─── Schedule Preview ───────────────────────────────────────────────────────
+
+  async previewSchedule(dto: CreateStudyPlanDto): Promise<StudyPlanDetailsSummary> {
+    const result = await this.buildScheduleTasks(
+      dto.certificationId,
+      dto.dailyHours,
+      dto.targetDate,
+      dto.selectedMaterialIds,
+    );
+
+    return this.buildDetailsSummaryFromTasks(result.tasks, result.topicTitleById, result.resourceTitleById);
+  }
+
+  private buildDetailsSummaryFromTasks(
+    tasks: (typeof schema.studyTasks.$inferInsert)[],
+    topicTitleById: Map<string, string>,
+    resourceTitleById: Map<string, string>,
+  ): StudyPlanDetailsSummary {
+    if (tasks.length === 0) {
+      return { totals: { flashcards: 0, quizzes: 0, mockExams: 0, practiceTests: 0 }, weeksSummary: [] };
+    }
+
+    const planStartStr = String(tasks[0]!.scheduledDate);
+    const planStart = new Date(planStartStr + 'T00:00:00');
+
+    // Group tasks into weeks
+    const weekMap = new Map<number, (typeof schema.studyTasks.$inferInsert)[]>();
+    for (const task of tasks) {
+      const taskDate = new Date(String(task.scheduledDate) + 'T00:00:00');
+      const daysDiff = Math.floor((taskDate.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24));
+      const weekNumber = Math.floor(daysDiff / 7) + 1;
+      const existing = weekMap.get(weekNumber) ?? [];
+      existing.push(task);
+      weekMap.set(weekNumber, existing);
+    }
+
+    const weeksSummary: StudyPlanWeeklyDetails[] = Array.from(weekMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([weekNumber, weekTasks]) => {
+        const weekStartMs = planStart.getTime() + (weekNumber - 1) * 7 * 24 * 60 * 60 * 1000;
+        const weekEndMs = weekStartMs + 6 * 24 * 60 * 60 * 1000;
+        const startDate = new Date(weekStartMs).toISOString().split('T')[0]!;
+        const endDate = new Date(weekEndMs).toISOString().split('T')[0]!;
+
+        // Convert raw insert records to StudyTaskItem shape for buildWeeklyDescription
+        const taskItems: StudyTaskItem[] = weekTasks.map((t) => ({
+          id: '',
+          topicId: t.topicId ?? null,
+          type: (t.type ?? 'read') as StudyTaskType,
+          status: (t.status ?? 'pending') as StudyTaskStatus,
+          scheduledDate: String(t.scheduledDate),
+          topicTitle: t.topicId ? (topicTitleById.get(t.topicId) ?? null) : null,
+          title: t.title ?? null,
+          courseName: null,
+          externalResourceId: t.externalResourceId ?? null,
+          topicResourceUrl: null,
+          estimatedMinutes: t.plannedMinutes ?? TASK_MINUTES[t.type ?? 'read'] ?? 30,
+        }));
+
+        const mockExamTasks = taskItems.filter((t) => t.type === 'mock_exam');
+        const internalMockExams = new Set(
+          mockExamTasks.filter((t) => !t.externalResourceId).map((t) => t.title ?? t.id),
+        );
+        const externalPracticeTests = new Set(
+          mockExamTasks.filter((t) => t.externalResourceId).map((t) => t.externalResourceId!),
+        );
+
+        const seenResourceIds = new Set<string>();
+        const materials: WeekMaterialItem[] = [];
+        for (const t of weekTasks) {
+          if (!t.externalResourceId) continue;
+          if (seenResourceIds.has(t.externalResourceId)) continue;
+          seenResourceIds.add(t.externalResourceId);
+          const resTitle = resourceTitleById.get(t.externalResourceId);
+          materials.push({
+            externalResourceId: t.externalResourceId,
+            title: resTitle ?? t.title ?? 'Unknown',
+            type: t.type === 'mock_exam' ? 'practice_test'
+              : t.type === 'course' || t.type === 'video' ? t.type
+              : 'docs',
+          });
+        }
+
+        return {
+          weekNumber,
+          startDate,
+          endDate,
+          description: buildWeeklyDescription(taskItems),
+          flashcards: taskItems.filter((t) => t.type === 'flashcard').length,
+          quizzes: taskItems.filter((t) => t.type === 'quiz').length,
+          mockExams: internalMockExams.size,
+          practiceTests: externalPracticeTests.size,
+          materials,
+        };
+      });
+
+    return {
+      totals: {
+        flashcards: weeksSummary.reduce((sum, w) => sum + w.flashcards, 0),
+        quizzes: weeksSummary.reduce((sum, w) => sum + w.quizzes, 0),
+        mockExams: weeksSummary.reduce((sum, w) => sum + w.mockExams, 0),
+        practiceTests: weeksSummary.reduce((sum, w) => sum + w.practiceTests, 0),
+      },
+      weeksSummary,
+    };
+  }
+
+  /**
+   * Core scheduling algorithm: performs read-only DB queries (topics, quiz/flashcard
+   * coverage, resources) and builds the full task list in memory.
+   * Used by both plan creation (regenerateResourceTasks) and preview (previewSchedule).
+   */
+  private async buildScheduleTasks(
+    certificationId: string,
+    dailyHours: number,
+    targetDate: string,
+    selectedMaterialIds?: string[],
+    completedMinutesByTopic: Map<string, number> = new Map(),
+  ): Promise<{
+    tasks: (typeof schema.studyTasks.$inferInsert)[];
+    topicTitleById: Map<string, string>;
+    resourceTitleById: Map<string, string>;
+  }> {
+    const studyPlanId = '__preview__'; // placeholder; overwritten for real plans
+    const emptyResult = { tasks: [] as (typeof schema.studyTasks.$inferInsert)[], topicTitleById: new Map<string, string>(), resourceTitleById: new Map<string, string>() };
+
     // ── 3. Load all topics (including intro-general) ──────────────────────────
     const topicRows = await this.db
       .select({
@@ -386,7 +540,7 @@ export class StudyPlansService {
       .where(eq(schema.domains.certificationId, certificationId))
       .orderBy(desc(schema.domains.weightPercent), asc(schema.topics.createdAt));
 
-    if (topicRows.length === 0) return;
+    if (topicRows.length === 0) return emptyResult;
 
     // Build slug → topicId map using SAA_TOPICS seed data as the title→slug bridge
     const titleToTopicId = new Map(topicRows.map((t) => [t.title, t.id]));
@@ -456,11 +610,14 @@ export class StudyPlansService {
         r.type === 'course' || r.type === 'video' || r.type === 'docs' || r.type === 'practice_test',
     );
 
-    if (normalizedResources.length === 0) return;
+    if (normalizedResources.length === 0) return emptyResult;
+
+    const scheduleDays = this.buildScheduleDates(targetDate).length;
+    const totalBudgetMinutes = scheduleDays * Math.floor(dailyHours * 60);
 
     const baseSelectedResources = selectedMaterialIds?.length
       ? this.selectResourcesFromIdsWithRequiredCourse(normalizedResources, selectedMaterialIds)
-      : this.selectDefaultResources(normalizedResources, dailyHours);
+      : this.selectDefaultResources(normalizedResources, dailyHours, totalBudgetMinutes);
 
     // Always merge in all topic-scoped docs regardless of selection path.
     // This ensures WAF pillar and TD per-topic cheat sheet entries are always
@@ -493,7 +650,7 @@ export class StudyPlansService {
       selectedResources = [...selectedResources, ...missingRequiredPracticeTests];
     }
 
-    if (selectedResources.length === 0) return;
+    if (selectedResources.length === 0) return emptyResult;
 
     // ── 6. Build topic → course sections map ─────────────────────────────────
     // Every course section now has a topicSlug (intro sections use 'intro-general'),
@@ -554,7 +711,7 @@ export class StudyPlansService {
 
     // ── 9. Build schedule dates ───────────────────────────────────────────────
     const scheduleDates = this.buildScheduleDates(targetDate);
-    if (scheduleDates.length === 0) return;
+    if (scheduleDates.length === 0) return emptyResult;
 
     const dailyBudget = Math.max(MIN_SEGMENT_MINUTES, Math.floor(dailyHours * 60));
     let dateIndex = 0;
@@ -621,7 +778,10 @@ export class StudyPlansService {
 
     for (const topic of [...topicsWithSections, ...topicsWithoutSections]) {
       if (dateIndex >= scheduleDates.length) break;
-      if (dayUsed) advanceDay();
+      // Only advance when remaining budget is too small for any meaningful task.
+      // This allows lightweight topics (quiz + flashcard) to share a day with
+      // the previous topic instead of wasting an entire day's budget.
+      if (dayUsed && dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
       if (dateIndex >= scheduleDates.length) break;
 
       const sections = topicSectionMap.get(topic.id) ?? [];
@@ -665,7 +825,14 @@ export class StudyPlansService {
             if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
             if (dateIndex >= scheduleDates.length) break;
 
-            const keepWholeTask = sectionRemaining <= MAX_UNSPLIT_TASK_MINUTES;
+            const keepWholeTask = sectionRemaining <= MAX_UNSPLIT_TASK_MINUTES
+              && sectionRemaining <= dailyBudget;
+            // When keeping whole but it doesn't fit today's remaining budget,
+            // advance to a fresh day to avoid day-budget overflow.
+            if (keepWholeTask && sectionRemaining > dayRemaining) {
+              advanceDay();
+              if (dateIndex >= scheduleDates.length) break;
+            }
             const chunk = keepWholeTask
               ? sectionRemaining
               : Math.min(sectionRemaining, dayRemaining, COURSE_SEGMENT_MINUTES);
@@ -707,6 +874,12 @@ export class StudyPlansService {
           if (!shouldSplit) {
             if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
             if (dateIndex >= scheduleDates.length) break;
+            // If the doc doesn't fit in today's remaining budget but fits a
+            // full day, advance to avoid day-budget overflow.
+            if (remaining > dayRemaining && remaining <= dailyBudget) {
+              advanceDay();
+              if (dateIndex >= scheduleDates.length) break;
+            }
 
             pushTask({
               studyPlanId,
@@ -846,6 +1019,11 @@ export class StudyPlansService {
     }
 
     if (scheduleDates.length > 0) {
+      // Place the final mock exam on the next available day after all content
+      // instead of on the very last schedule date. This prevents large empty
+      // gaps (and empty weeks) between regular content and the mock exam.
+      if (dayUsed) advanceDay();
+      const mockExamDateIndex = Math.min(dateIndex, scheduleDates.length - 1);
       pushTask({
         studyPlanId,
         topicId: finalMockExamResource?.topicId ?? null,
@@ -853,14 +1031,14 @@ export class StudyPlansService {
         title: FINAL_MOCK_EXAM_TITLE,
         type: 'mock_exam',
         status: 'pending',
-        scheduledDate: scheduleDates[scheduleDates.length - 1]!,
+        scheduledDate: scheduleDates[mockExamDateIndex]!,
         plannedMinutes: finalMockExamResource?.estimatedMinutes ?? 130,
       });
     }
 
-    if (tasksToInsert.length > 0) {
-      await this.db.insert(schema.studyTasks).values(tasksToInsert);
-    }
+    const topicTitleById = new Map(topicRows.map((t) => [t.id, t.title]));
+    const resourceTitleById = new Map(allResources.map((r) => [r.id, r.title]));
+    return { tasks: tasksToInsert, topicTitleById, resourceTitleById };
   }
 
   /**
@@ -927,10 +1105,38 @@ export class StudyPlansService {
     }
   }
 
-  private selectDefaultResources(resources: ExternalResourceTask[], dailyHours: number): ExternalResourceTask[] {
+  private selectDefaultResources(
+    resources: ExternalResourceTask[],
+    dailyHours: number,
+    totalBudgetMinutes: number,
+  ): ExternalResourceTask[] {
     const allDocs = resources.filter((resource) => resource.type === 'docs');
+
+    const courses = resources.filter((resource) => resource.type === 'course');
+    const requiredCourse = courses.find((r) => this.isRequiredSaaCourse(r));
+    const otherCourses = courses.filter((r) => !this.isRequiredSaaCourse(r));
+
+    // Pick the biggest non-required course (Cantrill) if the schedule budget can
+    // accommodate it alongside practice tests and docs. Otherwise fall back to
+    // the smaller required course (Maarek) so the schedule isn't oversaturated.
+    const biggestAlternative = otherCourses.length > 0
+      ? otherCourses.reduce((a, b) => ((b.estimatedMinutes ?? 0) > (a.estimatedMinutes ?? 0) ? b : a))
+      : null;
+
+    // Reserve ~40 % of the budget for non-course materials (practice tests, docs, etc.)
+    const courseTimeBudget = totalBudgetMinutes * 0.6;
+
+    let selectedCourse: ExternalResourceTask | undefined;
+    if (biggestAlternative && (biggestAlternative.estimatedMinutes ?? 0) <= courseTimeBudget) {
+      selectedCourse = biggestAlternative;
+    } else if (requiredCourse) {
+      selectedCourse = requiredCourse;
+    } else {
+      selectedCourse = courses[0];
+    }
+
     const resourceGroups = {
-      course: resources.filter((resource) => resource.type === 'course'),
+      course: selectedCourse ? [selectedCourse] : [],
       // Topic-scoped docs are always included in full; only global docs are capped by the profile limit.
       topicDocs: allDocs.filter((resource) => resource.topicId !== null),
       globalDocs: allDocs.filter((resource) => resource.topicId === null),
@@ -945,7 +1151,7 @@ export class StudyPlansService {
         : { docs: 5, videos: 2, practiceTests: 1 };
 
     return [
-      ...resourceGroups.course.slice(0, 1),
+      ...resourceGroups.course,
       ...resourceGroups.topicDocs,
       ...resourceGroups.globalDocs.slice(0, profile.docs),
       ...resourceGroups.video.slice(0, profile.videos),
@@ -1189,7 +1395,7 @@ export class StudyPlansService {
       return {
         weeks: [],
         details: {
-          totals: { flashcards: 0, quizzes: 0, mockExams: 0 },
+          totals: { flashcards: 0, quizzes: 0, mockExams: 0, practiceTests: 0 },
           weeksSummary: [],
         },
       };
@@ -1222,7 +1428,7 @@ export class StudyPlansService {
       return {
         weeks: [],
         details: {
-          totals: { flashcards: 0, quizzes: 0, mockExams: 0 },
+          totals: { flashcards: 0, quizzes: 0, mockExams: 0, practiceTests: 0 },
           weeksSummary: [],
         },
       };
@@ -1231,24 +1437,9 @@ export class StudyPlansService {
     const planStart = new Date(String(rawTasks[0]!.scheduledDate) + 'T00:00:00');
     const weekMap = new Map<number, StudyTaskItem[]>();
 
-    // Find the last task date to determine the actual plan duration
-    let lastTaskDate = planStart;
-    for (const row of rawTasks) {
-      const taskDate = new Date(String(row.scheduledDate) + 'T00:00:00');
-      if (taskDate > lastTaskDate) {
-        lastTaskDate = taskDate;
-      }
-    }
-
-    // Calculate total weeks based on actual scheduled tasks
-    const totalDays = Math.floor((lastTaskDate.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24));
-    const totalWeeks = Math.floor(totalDays / 7) + 1;
-
-    // Initialize all weeks as empty
-    for (let i = 1; i <= totalWeeks; i++) {
-      weekMap.set(i, []);
-    }
-
+    // Build weeks from actual task data only — no pre-initialization.
+    // Pre-creating all weeks from 1..totalWeeks caused empty weeks to appear
+    // when content didn't span the entire date range.
     for (const row of rawTasks) {
       const taskDate = new Date(String(row.scheduledDate) + 'T00:00:00');
       const daysDiff = Math.floor((taskDate.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24));
@@ -1286,21 +1477,57 @@ export class StudyPlansService {
         };
       });
 
-    const detailsWeeks: StudyPlanWeeklyDetails[] = weeks.map((week) => ({
-      weekNumber: week.weekNumber,
-      startDate: week.startDate,
-      endDate: week.endDate,
-      description: buildWeeklyDescription(week.tasks),
-      flashcards: week.tasks.filter((task) => task.type === 'flashcard').length,
-      quizzes: week.tasks.filter((task) => task.type === 'quiz').length,
-      mockExams: week.tasks.filter((task) => task.type === 'mock_exam').length,
-    }));
+    const detailsWeeks: StudyPlanWeeklyDetails[] = weeks.map((week) => {
+      const mockExamTasks = week.tasks.filter((task) => task.type === 'mock_exam');
+      // Internal mock exams have no externalResourceId (generated by the platform)
+      const internalMockExams = new Set(
+        mockExamTasks
+          .filter((task) => !task.externalResourceId)
+          .map((task) => task.title ?? task.id),
+      );
+      // External practice tests have an externalResourceId (e.g. Tutorials Dojo)
+      const externalPracticeTests = new Set(
+        mockExamTasks
+          .filter((task) => task.externalResourceId)
+          .map((task) => task.externalResourceId!),
+      );
+
+      // Extract unique materials used this week from actual task data.
+      // Skip external practice tests — they are represented by the practiceTests count.
+      const seenResourceIds = new Set<string>();
+      const weekMaterials: WeekMaterialItem[] = [];
+      for (const task of week.tasks) {
+        if (!task.externalResourceId) continue;
+        if (seenResourceIds.has(task.externalResourceId)) continue;
+        seenResourceIds.add(task.externalResourceId);
+        weekMaterials.push({
+          externalResourceId: task.externalResourceId,
+          title: task.courseName ?? task.title ?? 'Unknown',
+          type: task.type === 'mock_exam' ? 'practice_test'
+            : task.type === 'course' || task.type === 'video' ? task.type
+            : 'docs',
+        });
+      }
+
+      return {
+        weekNumber: week.weekNumber,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        description: buildWeeklyDescription(week.tasks),
+        flashcards: week.tasks.filter((task) => task.type === 'flashcard').length,
+        quizzes: week.tasks.filter((task) => task.type === 'quiz').length,
+        mockExams: internalMockExams.size,
+        practiceTests: externalPracticeTests.size,
+        materials: weekMaterials,
+      };
+    });
 
     const details: StudyPlanDetailsSummary = {
       totals: {
         flashcards: detailsWeeks.reduce((sum, week) => sum + week.flashcards, 0),
         quizzes: detailsWeeks.reduce((sum, week) => sum + week.quizzes, 0),
         mockExams: detailsWeeks.reduce((sum, week) => sum + week.mockExams, 0),
+        practiceTests: detailsWeeks.reduce((sum, week) => sum + week.practiceTests, 0),
       },
       weeksSummary: detailsWeeks,
     };

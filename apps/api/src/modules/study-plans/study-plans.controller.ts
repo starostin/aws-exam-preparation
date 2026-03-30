@@ -4,7 +4,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CreateStudyPlanDto } from './dto/create-study-plan.dto';
 import { RescheduleTaskDto } from './dto/reschedule-task.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
-import { StudyPlansService, type DashboardResponse, type PlanRow, type PlanScheduleResponse, type StudyPlanTemplate, type UpcomingDay } from './study-plans.service';
+import { StudyPlansService, type DashboardResponse, type PlanRow, type PlanScheduleResponse, type StudyPlanDetailsSummary, type StudyPlanTemplate, type UpcomingDay } from './study-plans.service';
 
 @Controller({ path: 'study-plans', version: '1' })
 @UseGuards(AuthGuard)
@@ -27,6 +27,13 @@ export class StudyPlansController {
     @Body() dto: CreateStudyPlanDto,
   ): Promise<{ id: string }> {
     return this.studyPlansService.createStudyPlan(user.id, dto);
+  }
+
+  @Post('preview')
+  async preview(
+    @Body() dto: CreateStudyPlanDto,
+  ): Promise<StudyPlanDetailsSummary> {
+    return this.studyPlansService.previewSchedule(dto);
   }
 
   @Get('me')

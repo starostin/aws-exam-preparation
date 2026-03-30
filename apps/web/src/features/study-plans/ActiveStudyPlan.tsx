@@ -147,7 +147,7 @@ export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting,
       <PlanDetailsModal
         template={template}
         materials={materials}
-        detailsSummary={detailsSummary}
+        detailsSummary={detailsSummary ?? null}
         open={detailsOpen && !templateLoading && !templateError}
         onOpenChange={setDetailsOpen}
       />

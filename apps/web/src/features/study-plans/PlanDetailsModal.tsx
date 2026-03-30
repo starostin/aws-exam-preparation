@@ -7,6 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { cn } from '@/lib/utils';
 import type { StudyMaterialItem, StudyPlanTemplate } from '@/lib/api/study-plans';
 
+export interface GeneratedWeekMaterialItem {
+  externalResourceId: string;
+  title: string;
+  type: string;
+}
+
 export interface GeneratedPlanWeeklyDetails {
   weekNumber: number;
   startDate: string;
@@ -15,6 +21,8 @@ export interface GeneratedPlanWeeklyDetails {
   flashcards: number;
   quizzes: number;
   mockExams: number;
+  practiceTests: number;
+  materials: GeneratedWeekMaterialItem[];
 }
 
 export interface GeneratedPlanDetailsSummary {
@@ -22,6 +30,7 @@ export interface GeneratedPlanDetailsSummary {
     flashcards: number;
     quizzes: number;
     mockExams: number;
+    practiceTests: number;
   };
   weeksSummary: GeneratedPlanWeeklyDetails[];
 }
@@ -44,6 +53,7 @@ export interface PlanDetailsModalProps {
   template: StudyPlanTemplate | null;
   materials: StudyMaterialItem[];
   detailsSummary?: GeneratedPlanDetailsSummary | null;
+  isLoadingPreview?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -55,42 +65,29 @@ function formatDateRange(start: string, end: string): string {
   return `${from} - ${to}`;
 }
 
-export function PlanDetailsModal({ template, materials, detailsSummary, open, onOpenChange }: PlanDetailsModalProps) {
+export function PlanDetailsModal({ template, materials, detailsSummary, isLoadingPreview, open, onOpenChange }: PlanDetailsModalProps) {
   if (!template && !detailsSummary) return null;
 
   const materialById = new Map(materials.map((m) => [m.id, m]));
-
-  function getWeekMaterials(weekNumber: number): Array<{ id: string; title: string; type: string; url: string | null; isFree: boolean | null }> {
-    if (!template) return [];
-
-    const byWeek = template.phases
-      .filter((phase) => phase.weekNumbers.includes(weekNumber))
-      .flatMap((phase) => phase.resources);
-
-    const seen = new Set<string>();
-    const unique = byWeek.filter((resource) => {
-      if (seen.has(resource.id)) return false;
-      seen.add(resource.id);
-      return true;
-    });
-
-    return unique.map((resource) => {
-      const full = materialById.get(resource.id);
-      return full ?? { id: resource.id, title: resource.title, type: resource.type, url: null, isFree: null };
-    });
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-2xl max-h-[85vh] overflow-y-auto'>
         <DialogHeader>
-          <DialogTitle>{detailsSummary ? 'Plan Details' : template?.name}</DialogTitle>
+          <DialogTitle>{template?.name ?? 'Plan Details'}</DialogTitle>
           <DialogDescription>
-            {detailsSummary
-              ? 'Weekly learning summary with flashcard, quiz, and mock exam counts.'
-              : (template?.description ?? '')}
+            {template?.description ?? 'Weekly learning summary with flashcard, quiz, and mock exam counts.'}
           </DialogDescription>
         </DialogHeader>
+
+        {isLoadingPreview && !detailsSummary && (
+          <div className='flex items-center justify-center py-12'>
+            <div className='flex flex-col items-center gap-3'>
+              <div className='h-6 w-6 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent' />
+              <p className='text-sm text-muted-foreground'>Generating schedule preview…</p>
+            </div>
+          </div>
+        )}
 
         {detailsSummary && (
           <>
@@ -109,8 +106,13 @@ export function PlanDetailsModal({ template, materials, detailsSummary, open, on
                 {detailsSummary.totals.quizzes} quizzes
               </Badge>
               <Badge className='bg-amber-500/15 text-amber-700 dark:text-amber-300'>
-                {detailsSummary.totals.mockExams} mock exams
+                {detailsSummary.totals.mockExams} mock {detailsSummary.totals.mockExams === 1 ? 'exam' : 'exams'}
               </Badge>
+              {detailsSummary.totals.practiceTests > 0 && (
+                <Badge className='bg-orange-500/15 text-orange-700 dark:text-orange-300'>
+                  {detailsSummary.totals.practiceTests} practice {detailsSummary.totals.practiceTests === 1 ? 'test' : 'tests'}
+                </Badge>
+              )}
             </div>
 
             <div className='space-y-4'>
@@ -118,7 +120,15 @@ export function PlanDetailsModal({ template, materials, detailsSummary, open, on
 
               <div className='space-y-3'>
                 {detailsSummary.weeksSummary.map((week) => {
-                  const weekMaterials = getWeekMaterials(week.weekNumber);
+                  // Use materials from the server response (extracted from actual
+                  // tasks) instead of the template phase lookup which can't match
+                  // week numbers when the schedule is more compact than expected.
+                  const weekMaterials = (week.materials ?? []).map((m) => {
+                    const full = materialById.get(m.externalResourceId);
+                    return full
+                      ? { id: full.id, title: full.title, type: full.type, url: full.url, isFree: full.isFree }
+                      : { id: m.externalResourceId, title: m.title, type: m.type, url: null, isFree: null };
+                  });
                   return (
                     <div key={week.weekNumber} className='rounded-xl border border-border/70 bg-background/60 p-4 space-y-3'>
                       <div className='flex flex-wrap items-start justify-between gap-2'>
@@ -132,7 +142,12 @@ export function PlanDetailsModal({ template, materials, detailsSummary, open, on
                       <div className='flex flex-wrap gap-2'>
                         <Badge className='bg-blue-500/15 text-blue-700 dark:text-blue-300'>{week.flashcards} flashcards</Badge>
                         <Badge className='bg-violet-500/15 text-violet-700 dark:text-violet-300'>{week.quizzes} quizzes</Badge>
-                        <Badge className='bg-amber-500/15 text-amber-700 dark:text-amber-300'>{week.mockExams} mock exams</Badge>
+                        {week.mockExams > 0 && (
+                          <Badge className='bg-amber-500/15 text-amber-700 dark:text-amber-300'>{week.mockExams} mock {week.mockExams === 1 ? 'exam' : 'exams'}</Badge>
+                        )}
+                        {week.practiceTests > 0 && (
+                          <Badge className='bg-orange-500/15 text-orange-700 dark:text-orange-300'>{week.practiceTests} practice {week.practiceTests === 1 ? 'test' : 'tests'}</Badge>
+                        )}
                       </div>
 
                       {weekMaterials.length > 0 && (
@@ -187,86 +202,124 @@ export function PlanDetailsModal({ template, materials, detailsSummary, open, on
           </>
         )}
 
-        {!detailsSummary && template && (
-          <>
-            <div className='mt-2 flex flex-wrap gap-2'>
-              <Badge variant='outline'>{template.recommendedWeeks} weeks</Badge>
-              <Badge variant='outline'>{template.recommendedDailyHours}h/day</Badge>
-              <Badge variant='outline'>{template.totalHours}h total</Badge>
-              <Badge className='bg-cyan-500/15 text-cyan-700 dark:text-cyan-200'>{template.targetAudience}</Badge>
-            </div>
+        {!detailsSummary && !isLoadingPreview && template && (() => {
+          // Collect unique practice tests across all phases for the totals
+          const allPracticeTests = new Map<string, { id: string; title: string }>();
+          for (const phase of template.phases) {
+            for (const r of phase.resources) {
+              if (r.type === 'practice_test') allPracticeTests.set(r.id, r);
+            }
+          }
+          const totalPracticeTests = allPracticeTests.size;
 
-            <div className='space-y-4'>
-              <h3 className='text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground'>Week-by-Week Breakdown</h3>
-
-              <div className='space-y-3'>
-                {template.phases.map((phase) => {
-                  const startWeek = phase.weekNumbers[0] ?? 1;
-                  const endWeek = phase.weekNumbers[phase.weekNumbers.length - 1] ?? startWeek;
-                  const weekLabel = startWeek === endWeek ? `Week ${startWeek}` : `Weeks ${startWeek}–${endWeek}`;
-
-                  const phaseMaterials = phase.resources.map((r) => {
-                    const full = materialById.get(r.id);
-                    return full ?? { id: r.id, title: r.title, type: r.type, url: null, isFree: null };
-                  });
-
-                  return (
-                    <div key={phase.name} className='rounded-xl border border-border/70 bg-background/60 p-4 space-y-3'>
-                      <div className='flex flex-wrap items-start justify-between gap-2'>
-                        <div>
-                          <p className='text-base font-semibold text-foreground'>{phase.name}</p>
-                          <p className='text-sm text-muted-foreground'>{phase.description}</p>
-                        </div>
-                        <Badge variant='outline' className='shrink-0'>{weekLabel}</Badge>
-                      </div>
-
-                      {phaseMaterials.length > 0 && (
-                        <div className='space-y-2'>
-                          <p className='text-xs uppercase tracking-[0.14em] text-muted-foreground'>Materials</p>
-                          <div className='grid gap-2'>
-                            {phaseMaterials.map((material) => {
-                              const full = materialById.get(material.id);
-                              const typeColorClass = MATERIAL_TYPE_COLORS[material.type] ?? 'bg-muted text-muted-foreground';
-                              return (
-                                <div key={material.id} className='flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card/60 px-3 py-2'>
-                                  <div className='min-w-0'>
-                                    <p className='truncate text-sm font-medium text-foreground'>{material.title}</p>
-                                    {(full?.domainName ?? full?.topicTitle) ? (
-                                      <p className='text-xs text-muted-foreground'>{full?.domainName ?? full?.topicTitle}</p>
-                                    ) : null}
-                                  </div>
-                                  <div className='flex shrink-0 items-center gap-2'>
-                                    <Badge className={cn('text-xs', typeColorClass)}>
-                                      {MATERIAL_TYPE_LABELS[material.type] ?? material.type}
-                                    </Badge>
-                                    {full?.isFree !== null && full?.isFree !== undefined && (
-                                      <Badge variant='outline' className='text-xs'>{full.isFree ? 'Free' : 'Paid'}</Badge>
-                                    )}
-                                    {full?.url && (
-                                      <Button asChild size='sm' className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
-                                        <a href={full.url} target='_blank' rel='noreferrer'>
-                                          <ExternalLink className='h-3.5 w-3.5' />
-                                        </a>
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {phaseMaterials.length === 0 && (
-                        <p className='text-sm text-muted-foreground'>No specific materials assigned to this phase.</p>
-                      )}
-                    </div>
-                  );
-                })}
+          return (
+            <>
+              <div className='mt-2 flex flex-wrap gap-2'>
+                <Badge variant='outline'>{template.recommendedWeeks} weeks</Badge>
+                <Badge variant='outline'>{template.recommendedDailyHours}h/day</Badge>
+                <Badge variant='outline'>{template.totalHours}h total</Badge>
+                <Badge className='bg-cyan-500/15 text-cyan-700 dark:text-cyan-200'>{template.targetAudience}</Badge>
               </div>
-            </div>
-          </>
-        )}
+
+              <div className='mt-2 flex flex-wrap gap-2'>
+                <Badge className='bg-blue-500/15 text-blue-700 dark:text-blue-300'>Flashcards included</Badge>
+                <Badge className='bg-violet-500/15 text-violet-700 dark:text-violet-300'>Quizzes included</Badge>
+                <Badge className='bg-amber-500/15 text-amber-700 dark:text-amber-300'>1 mock exam</Badge>
+                {totalPracticeTests > 0 && (
+                  <Badge className='bg-orange-500/15 text-orange-700 dark:text-orange-300'>
+                    {totalPracticeTests} practice {totalPracticeTests === 1 ? 'test' : 'tests'}
+                  </Badge>
+                )}
+              </div>
+
+              <div className='space-y-4'>
+                <h3 className='text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground'>Phase-by-Phase Breakdown</h3>
+
+                <div className='space-y-3'>
+                  {template.phases.map((phase) => {
+                    const startWeek = phase.weekNumbers[0] ?? 1;
+                    const endWeek = phase.weekNumbers[phase.weekNumbers.length - 1] ?? startWeek;
+                    const weekLabel = startWeek === endWeek ? `Week ${startWeek}` : `Weeks ${startWeek}–${endWeek}`;
+
+                    const practiceTests = phase.resources.filter((r) => r.type === 'practice_test');
+                    const phaseMaterials = phase.resources
+                      .map((r) => {
+                        const full = materialById.get(r.id);
+                        return full ?? { id: r.id, title: r.title, type: r.type, url: null, isFree: null };
+                      });
+
+                    return (
+                      <div key={phase.name} className='rounded-xl border border-border/70 bg-background/60 p-4 space-y-3'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                          <div>
+                            <p className='text-base font-semibold text-foreground'>{phase.name}</p>
+                            <p className='text-sm text-muted-foreground'>{phase.description}</p>
+                          </div>
+                          <Badge variant='outline' className='shrink-0'>{weekLabel}</Badge>
+                        </div>
+
+                        <div className='flex flex-wrap gap-2'>
+                          {phase.focusTopicSlugs.length > 0 && (
+                            <>
+                              <Badge className='bg-blue-500/15 text-blue-700 dark:text-blue-300'>Flashcards</Badge>
+                              <Badge className='bg-violet-500/15 text-violet-700 dark:text-violet-300'>Quizzes</Badge>
+                            </>
+                          )}
+                          {practiceTests.length > 0 && (
+                            <Badge className='bg-orange-500/15 text-orange-700 dark:text-orange-300'>
+                              {practiceTests.length} practice {practiceTests.length === 1 ? 'test' : 'tests'}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {phaseMaterials.length > 0 && (
+                          <div className='space-y-2'>
+                            <p className='text-xs uppercase tracking-[0.14em] text-muted-foreground'>Materials</p>
+                            <div className='grid gap-2'>
+                              {phaseMaterials.map((material) => {
+                                const full = materialById.get(material.id);
+                                const typeColorClass = MATERIAL_TYPE_COLORS[material.type] ?? 'bg-muted text-muted-foreground';
+                                return (
+                                  <div key={material.id} className='flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card/60 px-3 py-2'>
+                                    <div className='min-w-0'>
+                                      <p className='truncate text-sm font-medium text-foreground'>{material.title}</p>
+                                      {(full?.domainName ?? full?.topicTitle) ? (
+                                        <p className='text-xs text-muted-foreground'>{full?.domainName ?? full?.topicTitle}</p>
+                                      ) : null}
+                                    </div>
+                                    <div className='flex shrink-0 items-center gap-2'>
+                                      <Badge className={cn('text-xs', typeColorClass)}>
+                                        {MATERIAL_TYPE_LABELS[material.type] ?? material.type}
+                                      </Badge>
+                                      {full?.isFree !== null && full?.isFree !== undefined && (
+                                        <Badge variant='outline' className='text-xs'>{full.isFree ? 'Free' : 'Paid'}</Badge>
+                                      )}
+                                      {full?.url && (
+                                        <Button asChild size='sm' className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
+                                          <a href={full.url} target='_blank' rel='noreferrer'>
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                          </a>
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {phaseMaterials.length === 0 && practiceTests.length === 0 && (
+                          <p className='text-sm text-muted-foreground'>No specific materials assigned to this phase.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
