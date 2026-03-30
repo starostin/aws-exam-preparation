@@ -474,6 +474,26 @@ export interface WeekSchedule {
   tasks: StudyTaskItem[];
 }
 
+export interface StudyPlanWeeklyDetails {
+  weekNumber: number;
+  startDate: string; // ISO date YYYY-MM-DD
+  endDate: string;   // ISO date YYYY-MM-DD
+  description: string;
+  flashcards: number;
+  quizzes: number;
+  mockExams: number;
+}
+
+export interface StudyPlanDetailsSummary {
+  totals: {
+    flashcards: number;
+    quizzes: number;
+    mockExams: number;
+  };
+  weeksSummary: StudyPlanWeeklyDetails[];
+}
+
 export interface PlanScheduleResponse {
   weeks: WeekSchedule[];
+  details?: StudyPlanDetailsSummary;
 }

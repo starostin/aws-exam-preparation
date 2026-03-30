@@ -97,8 +97,28 @@ export interface WeekSchedule {
   tasks: StudyTaskItem[];
 }
 
+export interface StudyPlanWeeklyDetails {
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  description: string;
+  flashcards: number;
+  quizzes: number;
+  mockExams: number;
+}
+
+export interface StudyPlanDetailsSummary {
+  totals: {
+    flashcards: number;
+    quizzes: number;
+    mockExams: number;
+  };
+  weeksSummary: StudyPlanWeeklyDetails[];
+}
+
 export interface PlanScheduleResponse {
   weeks: WeekSchedule[];
+  details: StudyPlanDetailsSummary;
 }
 
 // Estimated minutes each task type takes
@@ -116,16 +136,61 @@ const COURSE_SEGMENT_MINUTES = 90;
 const VIDEO_SEGMENT_MINUTES = 45;
 const MIN_SEGMENT_MINUTES = 20;
 const MAX_UNSPLIT_TASK_MINUTES = 120;
-const MIN_MIXED_ACTIVITY_MINUTES = 30;
-const RESOURCE_BUDGET_RATIO = 0.65;
 const REQUIRED_SAA_COURSE_TITLE = 'Ultimate SAA-C03 Course by Stephane Maarek';
 const REQUIRED_TD_PRACTICE_TEST_TITLE = 'Tutorials Dojo Practice Exams (Jon Bonso)';
 const EXAM_GUIDE_TITLE = 'SAA-C03 Exam Guide';
 const FINAL_MOCK_EXAM_TAG = 'final-mock-exam';
 const FINAL_MOCK_EXAM_TITLE = 'Mocked exam';
 
+const TASK_TYPE_DESCRIPTION_LABELS: Record<StudyTaskType, string> = {
+  read: 'documentation study',
+  quiz: 'quiz practice',
+  flashcard: 'flashcard drills',
+  mock_exam: 'mock exam practice',
+  review: 'review sessions',
+  course: 'course lessons',
+  video: 'video lessons',
+};
+
 function toDateString(date: Date): string {
   return date.toISOString().split('T')[0]!;
+}
+
+function buildWeeklyDescription(tasks: StudyTaskItem[]): string {
+  const uniqueTopics = Array.from(
+    new Set(
+      tasks
+        .map((task) => task.topicTitle ?? task.title)
+        .filter((value): value is string => !!value && value.trim().length > 0)
+        .map((value) => value.trim()),
+    ),
+  ).slice(0, 3);
+
+  const activityCounts = new Map<StudyTaskType, number>();
+  for (const task of tasks) {
+    const current = activityCounts.get(task.type) ?? 0;
+    activityCounts.set(task.type, current + 1);
+  }
+
+  const activityFocus = Array.from(activityCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([taskType]) => TASK_TYPE_DESCRIPTION_LABELS[taskType])
+    .join(' and ');
+
+  if (uniqueTopics.length > 0 && activityFocus.length > 0) {
+    return `Focus on ${uniqueTopics.join(', ')} while reinforcing knowledge through ${activityFocus}.`;
+  }
+
+  if (uniqueTopics.length > 0) {
+    return `Focus on ${uniqueTopics.join(', ')} this week.`;
+  }
+
+  if (activityFocus.length > 0) {
+    return `Focus on ${activityFocus} this week.`;
+  }
+
+  return 'Continue steady progress across your planned study tasks.';
 }
 
 export type PlanRow = {
@@ -1120,7 +1185,15 @@ export class StudyPlansService {
 
   async getSchedule(userId: string): Promise<PlanScheduleResponse> {
     const plan = await this.getMyStudyPlan(userId);
-    if (!plan) return { weeks: [] };
+    if (!plan) {
+      return {
+        weeks: [],
+        details: {
+          totals: { flashcards: 0, quizzes: 0, mockExams: 0 },
+          weeksSummary: [],
+        },
+      };
+    }
 
     const rawTasks = await this.db
       .select({
@@ -1145,10 +1218,36 @@ export class StudyPlansService {
       .where(eq(schema.studyTasks.studyPlanId, plan.id))
       .orderBy(asc(schema.studyTasks.scheduledDate), asc(schema.studyTasks.sortOrder));
 
-    if (rawTasks.length === 0) return { weeks: [] };
+    if (rawTasks.length === 0) {
+      return {
+        weeks: [],
+        details: {
+          totals: { flashcards: 0, quizzes: 0, mockExams: 0 },
+          weeksSummary: [],
+        },
+      };
+    }
 
     const planStart = new Date(String(rawTasks[0]!.scheduledDate) + 'T00:00:00');
     const weekMap = new Map<number, StudyTaskItem[]>();
+
+    // Find the last task date to determine the actual plan duration
+    let lastTaskDate = planStart;
+    for (const row of rawTasks) {
+      const taskDate = new Date(String(row.scheduledDate) + 'T00:00:00');
+      if (taskDate > lastTaskDate) {
+        lastTaskDate = taskDate;
+      }
+    }
+
+    // Calculate total weeks based on actual scheduled tasks
+    const totalDays = Math.floor((lastTaskDate.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24));
+    const totalWeeks = Math.floor(totalDays / 7) + 1;
+
+    // Initialize all weeks as empty
+    for (let i = 1; i <= totalWeeks; i++) {
+      weekMap.set(i, []);
+    }
 
     for (const row of rawTasks) {
       const taskDate = new Date(String(row.scheduledDate) + 'T00:00:00');
@@ -1187,7 +1286,26 @@ export class StudyPlansService {
         };
       });
 
-    return { weeks };
+    const detailsWeeks: StudyPlanWeeklyDetails[] = weeks.map((week) => ({
+      weekNumber: week.weekNumber,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      description: buildWeeklyDescription(week.tasks),
+      flashcards: week.tasks.filter((task) => task.type === 'flashcard').length,
+      quizzes: week.tasks.filter((task) => task.type === 'quiz').length,
+      mockExams: week.tasks.filter((task) => task.type === 'mock_exam').length,
+    }));
+
+    const details: StudyPlanDetailsSummary = {
+      totals: {
+        flashcards: detailsWeeks.reduce((sum, week) => sum + week.flashcards, 0),
+        quizzes: detailsWeeks.reduce((sum, week) => sum + week.quizzes, 0),
+        mockExams: detailsWeeks.reduce((sum, week) => sum + week.mockExams, 0),
+      },
+      weeksSummary: detailsWeeks,
+    };
+
+    return { weeks, details };
   }
 
   // ─── Task generation ────────────────────────────────────────────────────────

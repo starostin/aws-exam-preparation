@@ -262,6 +262,18 @@ export const SAA_RESOURCES: SeedResource[] = [
     tags: ['OPTIONAL', 'community-questions', 'pattern-recognition'],
     estimatedMinutes: 240,
   },
+  {
+    title: 'Tutorials Dojo AWS Cheat Sheets',
+    description: 'Quick-reference summary tables comparing key services (ECS vs EKS, SQS vs SNS, NAT Gateway vs NAT Instance, EBS types, RDS engines, etc.). Invaluable for last-minute consolidation before the exam.',
+    url: 'https://tutorialsdojo.com/aws-certified-solutions-architect-associate-saa-c03/',
+    type: 'docs',
+    priority: 2,
+    isFree: false,
+    provider: 'Tutorials Dojo',
+    level: 'mixed',
+    tags: ['NICE-TO-HAVE', 'cheat-sheets', 'study-aids', 'reference', 'consolidation'],
+    estimatedMinutes: 240,
+  },
 
   // --- SECTION 3: OFFICIAL DOCS & WHITEPAPERS ---
   {

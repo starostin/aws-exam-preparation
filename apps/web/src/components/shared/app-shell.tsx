@@ -16,6 +16,12 @@ interface AppShellProps {
   children: ReactNode;
 }
 
+function hasStudyPlanDateRange(value: unknown): value is { startDate: string; targetDate: string } {
+  if (!value || typeof value !== 'object') return false;
+  const maybePlan = value as { startDate?: unknown; targetDate?: unknown };
+  return typeof maybePlan.startDate === 'string' && typeof maybePlan.targetDate === 'string';
+}
+
 function isAuthPath(pathname: string): boolean {
   return pathname.startsWith('/auth');
 }
@@ -56,8 +62,11 @@ export function AppShell({ children }: AppShellProps) {
       setTodayTaskCount(dashboard.todaysTasks.length);
       setMissedTaskCount(dashboard.carryOverTasks.length);
       setCompletedTaskCount(Number(dashboard.stats.completedTasksTotal));
-      if (dashboard.studyPlan) {
-        setStudyPlanDates({ startDate: dashboard.studyPlan.startDate, targetDate: dashboard.studyPlan.targetDate });
+      if (hasStudyPlanDateRange(dashboard.studyPlan)) {
+        setStudyPlanDates({
+          startDate: dashboard.studyPlan.startDate,
+          targetDate: dashboard.studyPlan.targetDate,
+        });
       }
     } catch {
       // Ignore
@@ -98,8 +107,11 @@ export function AppShell({ children }: AppShellProps) {
         setTodayTaskCount(dashboard.todaysTasks.length);
         setMissedTaskCount(dashboard.carryOverTasks.length);
         setCompletedTaskCount(Number(dashboard.stats.completedTasksTotal));
-        if (dashboard.studyPlan) {
-          setStudyPlanDates({ startDate: dashboard.studyPlan.startDate, targetDate: dashboard.studyPlan.targetDate });
+        if (hasStudyPlanDateRange(dashboard.studyPlan)) {
+          setStudyPlanDates({
+            startDate: dashboard.studyPlan.startDate,
+            targetDate: dashboard.studyPlan.targetDate,
+          });
         }
       } catch {
         // Keep header available even if dashboard data is temporarily unavailable.

@@ -7,17 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PlanDetailsModal } from '@/features/study-plans/PlanDetailsModal';
+import type { GeneratedPlanDetailsSummary } from '@/features/study-plans/PlanDetailsModal';
 import type { StudyMaterialItem, StudyPlanTemplate } from '@/lib/api/study-plans';
 import type { DashboardStudyPlan } from '@aws-exam-prep/types';
 
 interface ActiveStudyPlanProps {
   studyPlan: DashboardStudyPlan;
   token: string | null;
+  detailsSummary?: GeneratedPlanDetailsSummary | null;
   isResetting?: boolean;
   onReset?: () => void;
 }
 
-export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: ActiveStudyPlanProps) {
+export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting, onReset }: ActiveStudyPlanProps) {
   const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [template, setTemplate] = useState<StudyPlanTemplate | null>(null);
@@ -26,8 +28,9 @@ export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: Acti
   const [templateError, setTemplateError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!detailsOpen || !token) return;
-    if (template) return; // already loaded
+    if (!detailsOpen) return;
+    if (!token) return;
+    if (template && materials.length > 0) return; // already loaded
 
     setTemplateLoading(true);
     setTemplateError(null);
@@ -50,7 +53,7 @@ export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: Acti
         setTemplateError(err instanceof Error ? err.message : 'Failed to load plan details');
       })
       .finally(() => setTemplateLoading(false));
-  }, [detailsOpen, token, template, studyPlan.certificationId, studyPlan.dailyHours]);
+  }, [detailsOpen, token, template, materials.length, studyPlan.certificationId, studyPlan.dailyHours]);
 
   const targetDateFormatted = new Date(studyPlan.targetDate + 'T00:00:00').toLocaleDateString('en-US', {
     year: 'numeric',
@@ -134,16 +137,17 @@ export function ActiveStudyPlan({ studyPlan, token, isResetting, onReset }: Acti
       )}
 
       {/* Loading / error state shown outside the modal while data is fetching */}
-      {detailsOpen && templateLoading && (
+      {detailsOpen && !detailsSummary && templateLoading && (
         <p className='px-5 py-2 text-sm text-muted-foreground'>Loading plan details…</p>
       )}
-      {detailsOpen && templateError && (
+      {detailsOpen && !detailsSummary && templateError && (
         <p className='px-5 py-2 text-sm text-destructive'>{templateError}</p>
       )}
 
       <PlanDetailsModal
         template={template}
         materials={materials}
+        detailsSummary={detailsSummary}
         open={detailsOpen && !templateLoading && !templateError}
         onOpenChange={setDetailsOpen}
       />

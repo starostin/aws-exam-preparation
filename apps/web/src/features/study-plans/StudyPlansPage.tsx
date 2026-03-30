@@ -15,6 +15,25 @@ import { TaskList } from '@/features/dashboard/TaskList';
 import type { DashboardResponse, PlanScheduleResponse, StudyTaskItem, TaskStatus, WeekSchedule } from '@aws-exam-prep/types';
 import type { CertificationItem, StudyMaterialItem } from '@/lib/api/study-plans';
 
+interface WeeklyDetailsSummary {
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  description: string;
+  flashcards: number;
+  quizzes: number;
+  mockExams: number;
+}
+
+interface PlanDetailsSummary {
+  totals: {
+    flashcards: number;
+    quizzes: number;
+    mockExams: number;
+  };
+  weeksSummary: WeeklyDetailsSummary[];
+}
+
 const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   read: 'Docs',
   quiz: 'Quiz',
@@ -277,6 +296,7 @@ export function StudyPlansPage() {
   }
 
   const studyPlan = dashboard?.studyPlan;
+  const scheduleDetails = (schedule as unknown as { details?: PlanDetailsSummary } | null)?.details ?? null;
 
   return (
     <div className='flex flex-col gap-6 pb-8 animate-rise-in'>
@@ -306,6 +326,7 @@ export function StudyPlansPage() {
             studyPlan={studyPlan}
             isResetting={isResetting}
             onReset={() => { void handleResetStudyPlan(); }}
+            detailsSummary={scheduleDetails}
             token={token}
           />
 
