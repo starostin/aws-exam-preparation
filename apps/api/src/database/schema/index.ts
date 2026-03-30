@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, boolean, integer, real, date, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, boolean, integer, real, date, jsonb, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // ─── Enumerations ──────────────────────────────────────────────────────────────
 
@@ -138,6 +138,33 @@ export const mockExamAttempts = pgTable('mock_exam_attempts', {
   startedAt: timestamp('started_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });
+
+export const mockExamQuestions = pgTable('mock_exam_questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mockExamId: uuid('mock_exam_id').notNull().references(() => mockExams.id),
+  topicId: uuid('topic_id').notNull().references(() => topics.id),
+  text: text('text').notNull(),
+  options: jsonb('options').notNull(),
+  explanation: text('explanation').notNull(),
+  difficulty: questionDifficultyEnum('difficulty').notNull().default('medium'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const mockExamAttemptQuestions = pgTable('mock_exam_attempt_questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  attemptId: uuid('attempt_id').notNull().references(() => mockExamAttempts.id),
+  questionId: uuid('question_id').notNull().references(() => mockExamQuestions.id),
+  questionOrder: integer('question_order').notNull(),
+  selectedOptionId: varchar('selected_option_id', { length: 100 }),
+  isCorrect: boolean('is_correct'),
+  answeredAt: timestamp('answered_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniqueAttemptOrder: uniqueIndex('mock_exam_attempt_questions_attempt_order_uidx').on(table.attemptId, table.questionOrder),
+  uniqueAttemptQuestion: uniqueIndex('mock_exam_attempt_questions_attempt_question_uidx').on(table.attemptId, table.questionId),
+}));
 
 // ─── Flashcards ───────────────────────────────────────────────────────────────
 

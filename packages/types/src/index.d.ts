@@ -158,6 +158,90 @@ export interface MockExamAttempt {
     startedAt: string;
     completedAt?: string;
 }
+export interface MockExamSummary {
+    id: string;
+    certificationId: string;
+    certificationCode: string;
+    title: string;
+    durationMinutes: number;
+    totalQuestions: number;
+}
+export interface MockExamQuestionItem {
+    id: string;
+    topicId: string;
+    topicTitle: string;
+    domainName: string;
+    text: string;
+    options: PublicQuizOption[];
+    difficulty: QuestionDifficulty;
+}
+export interface MockExamAttemptQuestionItem {
+    attemptQuestionId: string;
+    questionOrder: number;
+    selectedOptionId: string | null;
+    answeredAt: string | null;
+    question: MockExamQuestionItem;
+}
+export interface MockExamQuestionsPageResponse {
+    attemptId: string;
+    page: number;
+    pageSize: number;
+    totalQuestions: number;
+    items: MockExamAttemptQuestionItem[];
+}
+export interface StartMockExamAttemptResponse {
+    attemptId: string;
+    mockExamId: string;
+    title: string;
+    status: MockExamStatus;
+    durationMinutes: number;
+    totalQuestions: number;
+    answeredQuestions: number;
+    startedAt: string;
+}
+export interface SubmitMockExamAnswerInput {
+    questionId: string;
+    selectedOptionId: string;
+}
+export interface SubmitMockExamAnswerResponse {
+    attemptId: string;
+    questionId: string;
+    selectedOptionId: string;
+    isCorrect: boolean;
+    correctOptionId: string;
+    explanation: string;
+    answeredAt: string;
+}
+export interface CompleteMockExamAttemptResponse {
+    attemptId: string;
+    status: MockExamStatus;
+    score: number;
+    correctAnswers: number;
+    totalQuestions: number;
+    completedAt: string;
+}
+export interface MockExamAttemptProgressResponse {
+    attemptId: string;
+    mockExamId: string;
+    title: string;
+    status: MockExamStatus;
+    durationMinutes: number;
+    totalQuestions: number;
+    answeredQuestions: number;
+    startedAt: string;
+    completedAt: string | null;
+    score: number | null;
+}
+export interface MockExamAttemptHistoryItem {
+    attemptId: string;
+    mockExamId: string;
+    mockExamTitle: string;
+    certificationId: string;
+    status: MockExamStatus;
+    score: number | null;
+    startedAt: string;
+    completedAt: string | null;
+}
 export type FlashcardConfidence = 1 | 2 | 3 | 4 | 5;
 export interface Flashcard {
     id: string;
@@ -239,6 +323,7 @@ export interface DashboardStudyPlan {
     certificationName: string;
     certificationCode: string;
     targetDate: string;
+    startDate: string;
     dailyHours: number;
 }
 export interface UpcomingDay {

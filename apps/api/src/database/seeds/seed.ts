@@ -17,6 +17,7 @@ import { TD_CATALOG } from './data/saa-c03-tutorials-dojo';
 import { SAA_STUDY_PLANS } from './data/saa-c03-study-plans';
 import { SAA_QUIZ_QUESTIONS, type SeedQuizQuestion } from './data/saa-c03-quizzes';
 import { SAA_FLASHCARDS, type SeedFlashcard } from './data/saa-c03-flashcards';
+import { SAA_MOCK_EXAMS, SAA_MOCK_EXAM_QUESTIONS, type SeedMockExam, type SeedMockExamQuestion } from './data/saa-c03-mock-exams';
 
 type CertificationRow = typeof schema.certifications.$inferSelect;
 type DomainRow = typeof schema.domains.$inferSelect;
@@ -320,6 +321,84 @@ async function upsertQuizQuestion(
   });
 }
 
+async function upsertMockExam(
+  db: ReturnType<typeof drizzle>,
+  certificationId: string,
+  exam: SeedMockExam,
+): Promise<typeof schema.mockExams.$inferSelect> {
+  const [existing] = await db
+    .select()
+    .from(schema.mockExams)
+    .where(and(eq(schema.mockExams.certificationId, certificationId), eq(schema.mockExams.title, exam.title)))
+    .limit(1);
+
+  if (existing) {
+    const [updated] = await db
+      .update(schema.mockExams)
+      .set({
+        durationMinutes: exam.durationMinutes,
+        totalQuestions: exam.totalQuestions,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.mockExams.id, existing.id))
+      .returning();
+
+    return updated ?? existing;
+  }
+
+  const [created] = await db
+    .insert(schema.mockExams)
+    .values({
+      certificationId,
+      title: exam.title,
+      durationMinutes: exam.durationMinutes,
+      totalQuestions: exam.totalQuestions,
+    })
+    .returning();
+
+  if (!created) {
+    throw new Error(`Failed to create mock exam: ${exam.title}`);
+  }
+
+  return created;
+}
+
+async function upsertMockExamQuestion(
+  db: ReturnType<typeof drizzle>,
+  mockExamId: string,
+  topicId: string,
+  question: SeedMockExamQuestion,
+): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(schema.mockExamQuestions)
+    .where(and(eq(schema.mockExamQuestions.mockExamId, mockExamId), eq(schema.mockExamQuestions.text, question.text)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(schema.mockExamQuestions)
+      .set({
+        topicId,
+        options: question.options,
+        explanation: question.explanation,
+        difficulty: question.difficulty,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.mockExamQuestions.id, existing.id));
+    return;
+  }
+
+  await db.insert(schema.mockExamQuestions).values({
+    mockExamId,
+    topicId,
+    text: question.text,
+    options: question.options,
+    explanation: question.explanation,
+    difficulty: question.difficulty,
+  });
+}
+
 async function runSeed(): Promise<void> {
   dotenv.config({ path: '.env.local' });
   dotenv.config();
@@ -416,9 +495,29 @@ async function runSeed(): Promise<void> {
       await upsertFlashcard(db, topicId, card);
     }
 
+    const mockExamIdBySlug = new Map<string, string>();
+    for (const exam of SAA_MOCK_EXAMS) {
+      const seededExam = await upsertMockExam(db, certification.id, exam);
+      mockExamIdBySlug.set(exam.slug, seededExam.id);
+    }
+
+    for (const question of SAA_MOCK_EXAM_QUESTIONS) {
+      const mockExamId = mockExamIdBySlug.get(question.examSlug);
+      if (!mockExamId) {
+        throw new Error(`Missing mock exam for question (examSlug: ${question.examSlug})`);
+      }
+
+      const topicId = topicIdBySlug.get(question.topicSlug);
+      if (!topicId) {
+        throw new Error(`Missing topic for mock exam question (topicSlug: ${question.topicSlug})`);
+      }
+
+      await upsertMockExamQuestion(db, mockExamId, topicId, question);
+    }
+
     // Keep output concise for CI/local usage while still showing seed coverage.
     // eslint-disable-next-line no-console
-    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${allSeedResources.length} resources (${SAA_RESOURCES.length} core + ${SAA_WAF_RESOURCES.length} WAF + ${SAA_TD_RESOURCES.length} TD cheat sheets), ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions, ${SAA_FLASHCARDS.length} flashcards.`);
+    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${allSeedResources.length} resources (${SAA_RESOURCES.length} core + ${SAA_WAF_RESOURCES.length} WAF + ${SAA_TD_RESOURCES.length} TD cheat sheets), ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions, ${SAA_FLASHCARDS.length} flashcards, ${SAA_MOCK_EXAMS.length} mock exams, ${SAA_MOCK_EXAM_QUESTIONS.length} mock exam questions.`);
   } finally {
     await pool.end();
   }

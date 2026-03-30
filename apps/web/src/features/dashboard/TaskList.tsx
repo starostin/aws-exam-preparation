@@ -446,9 +446,10 @@ function TaskRow({
   onFlashcardFinished: (taskId: string, summary: { reviewed: number; total: number }) => void;
   flashcardSummary: { reviewed: number; total: number } | undefined;
 }) {
-  const isComingSoon = task.type === 'mock_exam';
+  const isMockExamTask = task.type === 'mock_exam';
   const typeColorClass = TYPE_COLORS[task.type] ?? 'bg-muted text-muted-foreground';
   const isQuizTask = task.type === 'quiz';
+  const isQuizLikeTask = isQuizTask || isMockExamTask;
   const isFlashcardTask = task.type === 'flashcard';
   const canStartQuiz = !isAnotherQuizActive && !isUpdating;
   const canCancelQuiz = isQuizActive && !isUpdating;
@@ -519,9 +520,7 @@ function TaskRow({
         </div>
 
         <div className='flex shrink-0 items-center gap-2'>
-          {isComingSoon ? (
-            <span className='text-xs italic text-muted-foreground'>Coming soon</span>
-          ) : isFlashcardTask ? (
+          {isFlashcardTask ? (
             <Button
               type='button'
               size='sm'
@@ -537,7 +536,7 @@ function TaskRow({
             >
               {isFlashcardActive ? 'Cancel' : flashcardSummary ? 'Review Again' : 'Start Flashcards'}
             </Button>
-          ) : isQuizTask ? (
+          ) : isQuizLikeTask ? (
             <Button
               type='button'
               size='sm'
@@ -549,9 +548,16 @@ function TaskRow({
                 }
                 void onQuizStarted(task);
               }}
-              className='bg-violet-500 text-white hover:bg-violet-400'
+              className={cn(
+                'text-white',
+                isMockExamTask ? 'bg-amber-500 hover:bg-amber-400' : 'bg-violet-500 hover:bg-violet-400',
+              )}
             >
-              {isQuizActive ? 'Cancel Quiz' : quizSummary ? 'Retake Quiz' : 'Start Quiz'}
+              {isQuizActive
+                ? (isMockExamTask ? 'Cancel Mocked exam' : 'Cancel Quiz')
+                : (quizSummary
+                    ? (isMockExamTask ? 'Retake Mocked exam' : 'Retake Quiz')
+                    : (isMockExamTask ? 'Start Mocked exam' : 'Start Quiz'))}
             </Button>
           ) : (
             <Button
@@ -564,7 +570,7 @@ function TaskRow({
               {isUpdating ? '…' : STATUS_LABELS[task.status]}
             </Button>
           )}
-          {resourceUrl && !isQuizTask && !isFlashcardTask && (
+          {resourceUrl && !isQuizLikeTask && !isFlashcardTask && (
             <Button asChild size='sm' className='bg-cyan-400 text-slate-950 hover:bg-cyan-300'>
               <a
                 href={resourceUrl}
@@ -578,11 +584,14 @@ function TaskRow({
         </div>
       </div>
 
-      {isQuizTask && isQuizActive && (
+      {isQuizLikeTask && isQuizActive && (
         <InlineTaskQuiz
           task={task}
           token={token}
           onStatusChanged={onStatusChanged}
+          forceMixedMode={isMockExamTask}
+          questionLimit={isMockExamTask ? 20 : 5}
+          accent={isMockExamTask ? 'mock_exam' : 'quiz'}
           onFinished={(summary) => { onQuizFinished(task.id, summary); }}
         />
       )}
@@ -602,11 +611,17 @@ function InlineTaskQuiz({
   task,
   token,
   onStatusChanged,
+  forceMixedMode = false,
+  questionLimit = 5,
+  accent = 'quiz',
   onFinished,
 }: {
   task: StudyTaskItem;
   token: string;
   onStatusChanged: (taskId: string, newStatus: TaskStatus) => void;
+  forceMixedMode?: boolean;
+  questionLimit?: number;
+  accent?: 'quiz' | 'mock_exam';
   onFinished: (summary: { correct: number; total: number }) => void;
 }) {
   const [questions, setQuestions] = useState<QuizQuestionItem[]>([]);
@@ -622,6 +637,8 @@ function InlineTaskQuiz({
 
   const currentQuestion = questions[currentIndex] ?? null;
 
+  const isMockExamAccent = accent === 'mock_exam';
+
   useEffect(() => {
     let isMounted = true;
 
@@ -630,9 +647,9 @@ function InlineTaskQuiz({
       setError(null);
       try {
         const questionSet = await fetchQuizQuestions(token, {
-          mode: task.topicId ? 'topic' : 'mixed',
-          ...(task.topicId ? { topicId: task.topicId } : {}),
-          limit: 5,
+          mode: forceMixedMode ? 'mixed' : (task.topicId ? 'topic' : 'mixed'),
+          ...(!forceMixedMode && task.topicId ? { topicId: task.topicId } : {}),
+          limit: questionLimit,
         });
 
         if (!isMounted) return;
@@ -661,7 +678,7 @@ function InlineTaskQuiz({
     return () => {
       isMounted = false;
     };
-  }, [task.topicId, token]);
+  }, [forceMixedMode, questionLimit, task.topicId, token]);
 
   async function handleSubmitAnswer(): Promise<void> {
     if (!currentQuestion || !selectedOptionId || feedback) return;
@@ -724,9 +741,17 @@ function InlineTaskQuiz({
   }
 
   return (
-    <div className='space-y-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-3'>
-      <p className='text-xs font-semibold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-300'>
-        Quiz in task row · Question {currentIndex + 1} of {questions.length}
+    <div className={cn(
+      'space-y-3 rounded-lg p-3',
+      isMockExamAccent
+        ? 'border border-amber-500/30 bg-amber-500/5'
+        : 'border border-violet-500/30 bg-violet-500/5',
+    )}>
+      <p className={cn(
+        'text-xs font-semibold uppercase tracking-[0.14em]',
+        isMockExamAccent ? 'text-amber-700 dark:text-amber-300' : 'text-violet-700 dark:text-violet-300',
+      )}>
+        {isMockExamAccent ? 'Mocked exam in task row' : 'Quiz in task row'} · Question {currentIndex + 1} of {questions.length}
       </p>
       <p className='text-sm font-medium text-foreground'>{currentQuestion.text}</p>
 

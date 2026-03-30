@@ -64,6 +64,7 @@ export interface DashboardStudyPlan {
   certificationName: string;
   certificationCode: string;
   targetDate: string;
+  startDate: string;
   dailyHours: number;
 }
 
@@ -103,9 +104,9 @@ export interface PlanScheduleResponse {
 // Estimated minutes each task type takes
 const TASK_MINUTES: Record<string, number> = {
   read: 30,
-  quiz: 30,
+  quiz: 10,
   review: 15,
-  flashcard: 20,
+  flashcard: 10,
   mock_exam: 90,
   course: 90,
   video: 45,
@@ -114,10 +115,14 @@ const TASK_MINUTES: Record<string, number> = {
 const COURSE_SEGMENT_MINUTES = 90;
 const VIDEO_SEGMENT_MINUTES = 45;
 const MIN_SEGMENT_MINUTES = 20;
+const MAX_UNSPLIT_TASK_MINUTES = 120;
 const MIN_MIXED_ACTIVITY_MINUTES = 30;
 const RESOURCE_BUDGET_RATIO = 0.65;
 const REQUIRED_SAA_COURSE_TITLE = 'Ultimate SAA-C03 Course by Stephane Maarek';
+const REQUIRED_TD_PRACTICE_TEST_TITLE = 'Tutorials Dojo Practice Exams (Jon Bonso)';
 const EXAM_GUIDE_TITLE = 'SAA-C03 Exam Guide';
+const FINAL_MOCK_EXAM_TAG = 'final-mock-exam';
+const FINAL_MOCK_EXAM_TITLE = 'Mocked exam';
 
 function toDateString(date: Date): string {
   return date.toISOString().split('T')[0]!;
@@ -129,6 +134,7 @@ export type PlanRow = {
   certificationName: string;
   certificationCode: string;
   targetDate: string;
+  startDate: Date;
   dailyHours: number;
 };
 
@@ -139,6 +145,7 @@ type ExternalResourceTask = {
   type: ExternalResourceType;
   priority: number;
   estimatedMinutes: number | null;
+  tags: string[];
 };
 
 @Injectable()
@@ -364,6 +371,7 @@ export class StudyPlansService {
         type: schema.externalResources.type,
         priority: schema.externalResources.priority,
         estimatedMinutes: schema.externalResources.estimatedMinutes,
+        tags: schema.externalResources.tags,
       })
       .from(schema.externalResources)
       .where(
@@ -396,9 +404,29 @@ export class StudyPlansService {
     const extraTopicDocs = normalizedResources.filter(
       (r) => r.type === 'docs' && r.topicId !== null && !baseSelectedIds.has(r.id),
     );
-    const selectedResources = extraTopicDocs.length > 0
+    let selectedResources = extraTopicDocs.length > 0
       ? [...baseSelectedResources, ...extraTopicDocs]
       : baseSelectedResources;
+
+    const tutorialsDojoPracticeTest = normalizedResources.find(
+      (resource) =>
+        resource.type === 'practice_test'
+        && resource.title.trim().toLowerCase() === REQUIRED_TD_PRACTICE_TEST_TITLE.toLowerCase(),
+    );
+    const finalMockExamResourceFromCatalog = normalizedResources.find(
+      (resource) => resource.type === 'practice_test' && resource.tags.includes(FINAL_MOCK_EXAM_TAG),
+    );
+
+    const selectedResourceIds = new Set(selectedResources.map((resource) => resource.id));
+    const requiredPracticeTests = [tutorialsDojoPracticeTest, finalMockExamResourceFromCatalog].filter(
+      (resource): resource is ExternalResourceTask => resource !== undefined,
+    );
+    const missingRequiredPracticeTests = requiredPracticeTests.filter(
+      (resource) => !selectedResourceIds.has(resource.id),
+    );
+    if (missingRequiredPracticeTests.length > 0) {
+      selectedResources = [...selectedResources, ...missingRequiredPracticeTests];
+    }
 
     if (selectedResources.length === 0) return;
 
@@ -452,6 +480,12 @@ export class StudyPlansService {
     }
 
     const practiceTests = selectedResources.filter((r) => r.type === 'practice_test');
+    const finalMockExamResource = finalMockExamResourceFromCatalog
+      ?? practiceTests.find((resource) => resource.tags.includes(FINAL_MOCK_EXAM_TAG))
+      ?? [...practiceTests].sort((a, b) => b.priority - a.priority || (b.estimatedMinutes ?? 0) - (a.estimatedMinutes ?? 0))[0];
+    const regularPracticeTests = finalMockExamResource
+      ? practiceTests.filter((resource) => resource.id !== finalMockExamResource.id)
+      : practiceTests;
 
     // ── 9. Build schedule dates ───────────────────────────────────────────────
     const scheduleDates = this.buildScheduleDates(targetDate);
@@ -566,7 +600,10 @@ export class StudyPlansService {
             if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
             if (dateIndex >= scheduleDates.length) break;
 
-            const chunk = Math.min(sectionRemaining, dayRemaining, COURSE_SEGMENT_MINUTES);
+            const keepWholeTask = sectionRemaining <= MAX_UNSPLIT_TASK_MINUTES;
+            const chunk = keepWholeTask
+              ? sectionRemaining
+              : Math.min(sectionRemaining, dayRemaining, COURSE_SEGMENT_MINUTES);
 
             pushTask({
               studyPlanId,
@@ -593,7 +630,7 @@ export class StudyPlansService {
           const segmentMinutes = this.getPreferredSegmentMinutes('read');
           let remaining = resource.estimatedMinutes ?? TASK_MINUTES['read'] ?? 30;
           let partIndex = 1;
-          const shouldSplit = remaining > segmentMinutes;
+          const shouldSplit = remaining > MAX_UNSPLIT_TASK_MINUTES;
 
           // For WAF/TD resources, resource.title = collection name (e.g.,
           // "AWS Well-Architected Framework"). Look up the per-section display
@@ -601,6 +638,25 @@ export class StudyPlansService {
           // which makes courseName show the collection name — matching courses.
           const displayTitle =
             docsSectionTitleMap.get(`${resource.title}:${topic.id}`) ?? resource.title;
+
+          if (!shouldSplit) {
+            if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
+            if (dateIndex >= scheduleDates.length) break;
+
+            pushTask({
+              studyPlanId,
+              topicId: topic.id,
+              externalResourceId: resource.id,
+              title: displayTitle,
+              type: 'read',
+              status: 'pending',
+              scheduledDate: scheduleDates[dateIndex]!,
+              plannedMinutes: remaining,
+            });
+
+            dayRemaining -= remaining;
+            continue;
+          }
 
           while (remaining > 0 && dateIndex < scheduleDates.length) {
             if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
@@ -673,13 +729,32 @@ export class StudyPlansService {
     // Advance past any topic day before starting practice tests
     if (dayUsed) advanceDay();
 
-    for (const resource of practiceTests) {
+    for (const resource of regularPracticeTests) {
       if (dateIndex >= scheduleDates.length) break;
 
       const segmentMinutes = this.getPreferredSegmentMinutes('mock_exam');
       let remaining = resource.estimatedMinutes ?? TASK_MINUTES['mock_exam'] ?? 90;
       let partIndex = 1;
-      const shouldSplit = remaining > segmentMinutes;
+      const shouldSplit = remaining > MAX_UNSPLIT_TASK_MINUTES;
+
+      if (!shouldSplit) {
+        if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
+        if (dateIndex >= scheduleDates.length) break;
+
+        pushTask({
+          studyPlanId,
+          topicId: resource.topicId,
+          externalResourceId: resource.id,
+          title: resource.title,
+          type: 'mock_exam',
+          status: 'pending',
+          scheduledDate: scheduleDates[dateIndex]!,
+          plannedMinutes: remaining,
+        });
+
+        dayRemaining -= remaining;
+        continue;
+      }
 
       while (remaining > 0 && dateIndex < scheduleDates.length) {
         if (dayRemaining < MIN_SEGMENT_MINUTES) advanceDay();
@@ -703,6 +778,19 @@ export class StudyPlansService {
         partIndex++;
         if (remaining > 0) advanceDay();
       }
+    }
+
+    if (scheduleDates.length > 0) {
+      pushTask({
+        studyPlanId,
+        topicId: finalMockExamResource?.topicId ?? null,
+        externalResourceId: null,
+        title: FINAL_MOCK_EXAM_TITLE,
+        type: 'mock_exam',
+        status: 'pending',
+        scheduledDate: scheduleDates[scheduleDates.length - 1]!,
+        plannedMinutes: finalMockExamResource?.estimatedMinutes ?? 130,
+      });
     }
 
     if (tasksToInsert.length > 0) {
@@ -850,6 +938,7 @@ export class StudyPlansService {
         certificationName: schema.certifications.name,
         certificationCode: schema.certifications.code,
         targetDate: schema.studyPlans.targetDate,
+        startDate: schema.studyPlans.createdAt,
         dailyHours: schema.studyPlans.dailyHours,
       })
       .from(schema.studyPlans)
@@ -1020,6 +1109,7 @@ export class StudyPlansService {
       certificationName: plan.certificationName,
       certificationCode: plan.certificationCode,
       targetDate: String(plan.targetDate),
+      startDate: plan.startDate.toISOString().split('T')[0]!,
       dailyHours: plan.dailyHours,
     };
 
@@ -1308,6 +1398,8 @@ export class StudyPlansService {
         id: schema.studyTasks.id,
         ownerId: schema.studyPlans.userId,
         studyPlanId: schema.studyTasks.studyPlanId,
+        type: schema.studyTasks.type,
+        title: schema.studyTasks.title,
       })
       .from(schema.studyTasks)
       .innerJoin(schema.studyPlans, eq(schema.studyTasks.studyPlanId, schema.studyPlans.id))
@@ -1330,8 +1422,11 @@ export class StudyPlansService {
 
     if (!updated) throw new NotFoundException('Task not found');
 
-    // Compact gaps: shift remaining pending tasks forward to fill any empty days
-    await this.compactFutureSchedule(task.studyPlanId);
+    const isFinalMockExamTask = task.type === 'mock_exam' && task.title === FINAL_MOCK_EXAM_TITLE;
+    if (!isFinalMockExamTask) {
+      // Compact gaps: shift remaining pending tasks forward to fill any empty days
+      await this.compactFutureSchedule(task.studyPlanId);
+    }
 
     const upcomingTasks = await this.fetchUpcomingTasks(task.studyPlanId);
     return { id: updated.id, scheduledDate: String(updated.scheduledDate), upcomingTasks };
@@ -1341,7 +1436,12 @@ export class StudyPlansService {
     const today = toDateString(new Date());
 
     const allPending = await this.db
-      .select({ id: schema.studyTasks.id, scheduledDate: schema.studyTasks.scheduledDate })
+      .select({
+        id: schema.studyTasks.id,
+        scheduledDate: schema.studyTasks.scheduledDate,
+        type: schema.studyTasks.type,
+        title: schema.studyTasks.title,
+      })
       .from(schema.studyTasks)
       .where(
         and(
@@ -1354,9 +1454,20 @@ export class StudyPlansService {
 
     if (allPending.length === 0) return;
 
+    const finalMockTask = allPending.find(
+      (task) => task.type === 'mock_exam' && task.title === FINAL_MOCK_EXAM_TITLE,
+    );
+    const sortablePending = finalMockTask
+      ? allPending.filter((task) => task.id !== finalMockTask.id)
+      : allPending;
+
+    if (sortablePending.length === 0) {
+      return;
+    }
+
     // Group task IDs by their current scheduled date
     const byDate = new Map<string, string[]>();
-    for (const t of allPending) {
+    for (const t of sortablePending) {
       const d = String(t.scheduledDate);
       const arr = byDate.get(d) ?? [];
       arr.push(t.id);
@@ -1378,6 +1489,16 @@ export class StudyPlansService {
           .where(inArray(schema.studyTasks.id, byDate.get(originalDate)!));
       }
       cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    if (finalMockTask) {
+      const finalDate = toDateString(cursor);
+      if (String(finalMockTask.scheduledDate) !== finalDate) {
+        await this.db
+          .update(schema.studyTasks)
+          .set({ scheduledDate: finalDate, updatedAt: new Date() })
+          .where(eq(schema.studyTasks.id, finalMockTask.id));
+      }
     }
   }
 

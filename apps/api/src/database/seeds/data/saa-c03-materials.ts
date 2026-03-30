@@ -199,6 +199,19 @@ export const SAA_RESOURCES: SeedResource[] = [
     tags: ['MUST-HAVE', 'exam-focused', 'concise'],
     estimatedMinutes: 1600,
   },
+  {
+    title: 'SAA-C03 Course by Tutorials Dojo (Jon Bonso)',
+    description: 'Comprehensive overview and reading material of SAA-C03 exam topics with practical explanations and exam-focused insights.',
+    url: 'https://tutorialsdojo.com/aws-certified-solutions-architect-associate-saa-c03/',
+    type: 'docs',
+    priority: 2,
+    isFree: false,
+    provider: 'Tutorials Dojo',
+    level: 'intermediate',
+    tags: ['NICE-TO-HAVE', 'exam-overview', 'reading-material'],
+    estimatedMinutes: 30,
+    topicSlug: 'intro-general',
+  },
 
   // --- SECTION 2: PRACTICE EXAMS (THE MOST CRITICAL COMPONENT) ---
   {
@@ -212,6 +225,18 @@ export const SAA_RESOURCES: SeedResource[] = [
     level: 'mixed',
     tags: ['MUST-HAVE', 'practice-exams', 'top-rated'],
     estimatedMinutes: 600,
+  },
+  {
+    title: 'SAA-C03 Final Readiness Mock Exam (In-App)',
+    description: 'Take this timed full mock exam as the final readiness checkpoint before your real test date.',
+    url: '/mock-exams',
+    type: 'practice_test',
+    priority: 1,
+    isFree: true,
+    provider: 'AWS Exam Prep App',
+    level: 'mixed',
+    tags: ['MUST-HAVE', 'practice-exams', 'final-mock-exam'],
+    estimatedMinutes: 130,
   },
   {
     title: 'Official AWS Practice Question Set',
@@ -306,19 +331,6 @@ export const SAA_RESOURCES: SeedResource[] = [
 
   // --- SECTION 4: CHEAT SHEETS & SUPPLEMENTS ---
   {
-    title: 'AWS Architecture Center',
-    description: 'Reference architectures and solution diagrams. Excellent for building intuition on scenario-based questions.',
-    url: 'https://aws.amazon.com/architecture/',
-    type: 'docs',
-    priority: 3,
-    isFree: true,
-    provider: 'AWS',
-    level: 'mixed',
-    tags: ['NICE-TO-HAVE', 'reference-architectures', 'scenarios'],
-    estimatedMinutes: 90,
-    topicSlug: 'intro-general',
-  },
-  {
     title: 'AWS re:Invent Deep Dive YouTube Playlist',
     description: 'Technical deep-dives on core services like S3, VPC, and RDS. Use these if you are struggling with a specific concept.',
     url: 'https://www.youtube.com/@AWSEventsChannel',
@@ -341,7 +353,7 @@ export const SAA_RESOURCES: SeedResource[] = [
     level: 'beginner',
     tags: ['OPTIONAL', 'modernization', 'ai'],
     estimatedMinutes: 45,
-    topicSlug: 'intro-general',
+    topicSlug: 'machine-learning-and-ai-services',
   },
 
   // --- SECTION 5: TOPIC-SPECIFIC SERVICE DOCUMENTATION ---

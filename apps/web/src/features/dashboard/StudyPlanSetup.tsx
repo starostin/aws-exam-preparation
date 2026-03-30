@@ -119,9 +119,13 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
   const customVariantSlug = `saa-c03-${customWeeks}w-${customHoursPerDay}h`;
   const customVariantTemplate = templates.find((t) => t.slug === customVariantSlug) ?? null;
   const activeTemplate = planMode === 'template' ? selectedTemplate : customVariantTemplate;
+  const targetSpanDays = Math.max(
+    0,
+    ((activeTemplate?.recommendedWeeks ?? customWeeks) * 7) - 1,
+  );
   const effectiveTargetDate = activeTemplate
-    ? addDays(today, activeTemplate.recommendedWeeks * 7)
-    : addDays(today, customWeeks * 7);
+    ? addDays(today, targetSpanDays)
+    : addDays(today, targetSpanDays);
   const effectiveTargetDateStr = effectiveTargetDate ? format(effectiveTargetDate, 'yyyy-MM-dd') : '';
   const effectiveDailyHours = activeTemplate?.recommendedDailyHours ?? customHoursPerDay;
   const daysUntil = effectiveTargetDate ? getDaysUntil(effectiveTargetDate) : 0;

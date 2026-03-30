@@ -29,6 +29,27 @@
       "when": 1775000000000,
       "tag": "0003_study_plan_course_splitting",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775280000000,
+      "tag": "0004_study_tasks_sort_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775280000000,
+      "tag": "0004_study_tasks_sort_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775283600000,
+      "tag": "0005_mock_exam_attempt_questions",
+      "breakpoints": true
     }
   ]
 }
