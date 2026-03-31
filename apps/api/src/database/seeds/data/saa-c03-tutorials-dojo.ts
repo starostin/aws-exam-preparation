@@ -106,7 +106,7 @@ export const TUTORIALS_DOJO_SAA: TdCollection = {
       slug: 'amazon-ec2',
       title: 'Amazon EC2',
       description: 'EC2 cheat sheet covering instance types, purchasing models, placement groups, AMIs, and Auto Scaling integration.',
-      url: 'https://tutorialsdojo.com/amazon-ec2/',
+      url: 'https://tutorialsdojo.com/amazon-elastic-compute-cloud-amazon-ec2/',
       estimatedMinutes: 20,
       topicSlug: 'compute-selection-and-scaling',
       tags: ['NICE-TO-HAVE', 'cheat-sheets', 'compute'],

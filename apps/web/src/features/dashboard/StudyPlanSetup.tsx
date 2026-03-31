@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { CheckCircle2, ClipboardCheck, Clock4, Copy, Info } from 'lucide-react';
+import { CheckCircle2, Clock4, Info } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createStudyPlan, fetchStudyMaterials, fetchStudyPlanTemplates, previewSchedule } from '@/lib/api/study-plans';
 import type { PreviewDetailsSummary } from '@/lib/api/study-plans';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { MATERIAL_TYPE_LABELS, PlanDetailsModal } from '@/features/study-plans/PlanDetailsModal';
+import { PlanDetailsModal } from '@/features/study-plans/PlanDetailsModal';
 import type { CertificationItem, StudyMaterialItem, StudyPlanTemplate } from '@/lib/api/study-plans';
 
 type PlanMode = 'template' | 'custom';
@@ -19,73 +19,6 @@ function addDays(baseDate: Date, days: number): Date {
   const nextDate = new Date(baseDate);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate;
-}
-
-function getDaysUntil(targetDate: Date): number {
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  const normalizedTargetDate = new Date(targetDate);
-  normalizedTargetDate.setHours(0, 0, 0, 0);
-
-  return Math.ceil((normalizedTargetDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function buildTemplateCopyText(
-  template: StudyPlanTemplate,
-  materials: StudyMaterialItem[],
-  certificationCode?: string,
-): string {
-  const materialById = new Map(materials.map((m) => [m.id, m]));
-
-  const lines: string[] = [
-    '# AWS Certification Study Plan – AI Validation Request',
-    '',
-    `Please review the following study plan for the **${certificationCode ?? 'AWS'} certification** and provide feedback on:`,
-    '- Coverage of exam domains and topics',
-    '- Pacing and time allocation per phase',
-    '- Quality and relevance of selected materials',
-    '- Any gaps or improvements you recommend',
-    '',
-    '---',
-    '',
-    `## Plan: ${template.name}`,
-    `**Description**: ${template.description}`,
-    `**Target Audience**: ${template.targetAudience}`,
-    `**Duration**: ${template.recommendedWeeks} weeks`,
-    `**Daily Commitment**: ${template.recommendedDailyHours} hours/day`,
-    `**Total Hours**: ${template.totalHours} hours`,
-    `**Tagline**: ${template.tagline}`,
-    '',
-    '## Week-by-Week Breakdown',
-    '',
-  ];
-
-  for (const phase of template.phases) {
-    const startWeek = phase.weekNumbers[0] ?? 1;
-    const endWeek = phase.weekNumbers[phase.weekNumbers.length - 1] ?? startWeek;
-    const weekLabel = startWeek === endWeek ? `Week ${startWeek}` : `Weeks ${startWeek}–${endWeek}`;
-
-    lines.push(`### ${phase.name} (${weekLabel})`);
-    lines.push(phase.description);
-
-    if (phase.resources.length > 0) {
-      lines.push('');
-      lines.push('**Materials:**');
-      for (const r of phase.resources) {
-        const full = materialById.get(r.id);
-        const typeLabel = MATERIAL_TYPE_LABELS[r.type] ?? r.type;
-        const freeLabel = full?.isFree != null ? (full.isFree ? 'Free' : 'Paid') : '';
-        const topic = full?.domainName ?? full?.topicTitle ?? '';
-        const url = full?.url ?? '';
-        lines.push(`- **${r.title}** (${typeLabel})${freeLabel ? ` – ${freeLabel}` : ''}${topic ? ` | ${topic}` : ''}`);
-        if (url) lines.push(`  URL: ${url}`);
-      }
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
 }
 
 interface Props {
@@ -104,7 +37,6 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
   const [templates, setTemplates] = useState<StudyPlanTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [customWeeks, setCustomWeeks] = useState<number>(4);
   const [customHoursPerDay, setCustomHoursPerDay] = useState<number>(2);
 
@@ -114,23 +46,17 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
   const [detailsTemplate, setDetailsTemplate] = useState<StudyPlanTemplate | null>(null);
   const [previewDetails, setPreviewDetails] = useState<PreviewDetailsSummary | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const today = new Date();
   const featuredTemplates = templates.filter((t) => !/^saa-c03-\d+w-\d+h$/.test(t.slug));
-  const selectedTemplate = featuredTemplates.find((t) => t.slug === selectedTemplateId) ?? featuredTemplates[1] ?? featuredTemplates[0];
   const customVariantSlug = `saa-c03-${customWeeks}w-${customHoursPerDay}h`;
   const customVariantTemplate = templates.find((t) => t.slug === customVariantSlug) ?? null;
-  const activeTemplate = planMode === 'template' ? selectedTemplate : customVariantTemplate;
   const targetSpanDays = Math.max(
     0,
-    ((activeTemplate?.recommendedWeeks ?? customWeeks) * 7) - 1,
+    ((customVariantTemplate?.recommendedWeeks ?? customWeeks) * 7) - 1,
   );
   const effectiveTargetDate = addDays(today, targetSpanDays);
   const effectiveTargetDateStr = effectiveTargetDate ? format(effectiveTargetDate, 'yyyy-MM-dd') : '';
-  const effectiveDailyHours = activeTemplate?.recommendedDailyHours ?? customHoursPerDay;
-  const daysUntil = effectiveTargetDate ? getDaysUntil(effectiveTargetDate) : 0;
-  const totalHours = activeTemplate?.totalHours ?? (daysUntil * effectiveDailyHours);
 
   useEffect(() => {
     let isMounted = true;
@@ -141,7 +67,6 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
         const data = await fetchStudyPlanTemplates(token);
         if (isMounted) {
           setTemplates(data);
-          setSelectedTemplateId((prev) => prev || data[1]?.slug || data[0]?.slug || '');
         }
       } catch {
         if (isMounted) setTemplatesError('Failed to load plan templates.');
@@ -223,20 +148,15 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
     }
   }
 
-  async function handleCopy(text: string, id: string): Promise<void> {
-    await navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  }
-
   async function handleAcceptTemplate(template: StudyPlanTemplate): Promise<void> {
-    if (!certificationId || !effectiveTargetDateStr) return;
+    if (!certificationId) return;
+    const targetDate = format(addDays(new Date(), Math.max(0, template.recommendedWeeks * 7 - 1)), 'yyyy-MM-dd');
     setIsSubmitting(true);
     setError(null);
     try {
       await createStudyPlan({
         certificationId,
-        targetDate: effectiveTargetDateStr,
+        targetDate,
         dailyHours: template.recommendedDailyHours,
         selectedMaterialIds: template.selectedMaterialIds,
       }, token);
@@ -353,21 +273,15 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                   featuredTemplates.map((template) => (
                     <div
                       key={template.slug}
-                      onClick={() => {
-                        resetReviewState();
-                        setSelectedTemplateId(template.slug);
-                      }}
-                      className={cn(
-                        'rounded-xl border p-4 text-left transition-colors cursor-pointer',
-                        selectedTemplateId === template.slug
-                          ? 'border-cyan-400/60 bg-cyan-500/10'
-                          : 'border-border/70 bg-background/50 hover:border-cyan-400/30 hover:bg-background/80',
-                      )}
+                      className='rounded-xl border border-border/70 bg-background/50 p-4 text-left transition-colors hover:border-cyan-400/30 hover:bg-background/80'
                     >
                       <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <p className='text-base font-semibold text-foreground'>{template.name}</p>
+                        <div className='flex items-center gap-2'>
+                          <p className='text-base font-semibold text-foreground'>
+                            {template.totalHours}h total · {template.name}
+                          </p>
+                        </div>
                         <div className='flex shrink-0 items-center gap-2'>
-                          <Badge variant='outline'>{template.recommendedWeeks} weeks</Badge>
                           <Button
                             type='button'
                             size='sm'
@@ -384,29 +298,10 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                           <Button
                             type='button'
                             size='sm'
-                            variant='outline'
-                            className='h-7 gap-1 border-cyan-400/40 text-cyan-700 hover:bg-cyan-500/10 dark:text-cyan-200'
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleCopy(
-                                buildTemplateCopyText(template, materials, certifications.find((c) => c.id === certificationId)?.code),
-                                template.slug,
-                              );
-                            }}
-                          >
-                            {copiedId === template.slug
-                              ? <ClipboardCheck className='h-3.5 w-3.5' />
-                              : <Copy className='h-3.5 w-3.5' />}
-                            {copiedId === template.slug ? 'Copied!' : 'Copy'}
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
                             className='h-7 gap-1 bg-cyan-400 text-slate-950 hover:bg-cyan-300'
                             disabled={isSubmitting}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedTemplateId(template.slug);
                               void handleAcceptTemplate(template);
                             }}
                           >
@@ -417,11 +312,6 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                       </div>
 
                       <p className='mt-2 text-sm text-muted-foreground'>{template.description}</p>
-
-                      <div className='mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground'>
-                        <span>{template.recommendedDailyHours}h/day</span>
-                        <span>{template.tagline}</span>
-                      </div>
 
                       <p className='mt-3 text-xs uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-200'>Ideal for: {template.targetAudience}</p>
                     </div>
@@ -489,12 +379,13 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
               {!isLoadingTemplates && customVariantTemplate && (
                 <div className='grid gap-3'>
                   <label className='text-sm font-medium text-foreground'>Your Plan</label>
-                  <div className='rounded-xl border border-cyan-400/60 bg-cyan-500/10 p-4'>
-                    <div className='flex items-start justify-between gap-3'>
-                      <div>
-                        <p className='text-base font-semibold text-foreground'>{customVariantTemplate.name}</p>
-                        <p className='mt-1 text-sm text-muted-foreground'>{customVariantTemplate.tagline}</p>
-                      </div>
+                  <div className='rounded-xl border border-border/70 bg-background/50 p-4 transition-colors hover:border-cyan-400/30 hover:bg-background/80'>
+                    <div className='flex flex-wrap items-center justify-between gap-3'>
+                        <div className='flex items-center gap-2'>
+                          <p className='text-base font-semibold text-foreground'>
+                            {customVariantTemplate.totalHours}h total · {customVariantTemplate.name}
+                          </p>
+                        </div>
                       <div className='flex shrink-0 items-center gap-2'>
                         <Button
                           type='button'
@@ -507,27 +398,6 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                           Details
                         </Button>
                         <Button
-                          type='button'
-                          size='sm'
-                          variant='outline'
-                          className='h-7 gap-1 border-cyan-400/40 text-cyan-700 hover:bg-cyan-500/10 dark:text-cyan-200'
-                          onClick={() => {
-                            void handleCopy(
-                              buildTemplateCopyText(
-                                customVariantTemplate,
-                                materials,
-                                certifications.find((c) => c.id === certificationId)?.code,
-                              ),
-                              'custom-variant',
-                            );
-                          }}
-                        >
-                          {copiedId === 'custom-variant'
-                            ? <ClipboardCheck className='h-3.5 w-3.5' />
-                            : <Copy className='h-3.5 w-3.5' />}
-                          {copiedId === 'custom-variant' ? 'Copied!' : 'Copy'}
-                        </Button>
-                        <Button
                           type='submit'
                           size='sm'
                           className='h-7 gap-1 bg-cyan-400 text-slate-950 hover:bg-cyan-300'
@@ -537,11 +407,6 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                           {isSubmitting ? 'Creating...' : 'Accept Plan'}
                         </Button>
                       </div>
-                    </div>
-                    <div className='mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground'>
-                      <span>{customVariantTemplate.recommendedWeeks === 1 ? '1 week' : `${customVariantTemplate.recommendedWeeks} weeks`}</span>
-                      <span>{customVariantTemplate.recommendedDailyHours}h/day</span>
-                      <span>{customVariantTemplate.totalHours}h total</span>
                     </div>
                     <p className='mt-3 text-xs uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-200'>
                       Ideal for: {customVariantTemplate.targetAudience}
@@ -553,16 +418,14 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
               {!isLoadingTemplates && !customVariantTemplate && (
                 <div className='grid gap-3'>
                   <label className='text-sm font-medium text-foreground'>Your Plan</label>
-                  <div className='rounded-xl border border-cyan-400/60 bg-cyan-500/10 p-4'>
-                    <div className='flex items-start justify-between gap-3'>
-                      <div>
-                        <p className='text-base font-semibold text-foreground'>
-                          {customWeeks === 1 ? '1 week' : `${customWeeks} weeks`} · {customHoursPerDay}h/day · Custom
-                        </p>
-                        <p className='mt-1 text-sm text-muted-foreground'>
-                          The system will build a personalised schedule using the best available study materials for your pace.
-                        </p>
-                      </div>
+                  <div className='rounded-xl border border-border/70 bg-background/50 p-4 transition-colors hover:border-cyan-400/30 hover:bg-background/80'>
+                    <div className='flex flex-wrap items-center justify-between gap-3'>
+                        <div className='flex items-center gap-2'>
+                          <p className='text-base font-semibold text-foreground'>
+                            {customWeeks * customHoursPerDay * 7}h total · Custom
+                          </p>
+                        </div>
+                      <div className='flex shrink-0 items-center gap-2'>
                       <Button
                         type='submit'
                         size='sm'
@@ -572,48 +435,13 @@ export function StudyPlanSetup({ certifications, token, onCreated }: Props) {
                         <CheckCircle2 className='h-3.5 w-3.5' />
                         {isSubmitting ? 'Creating...' : 'Create Plan'}
                       </Button>
-                    </div>
-                    <div className='mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground'>
-                      <span>{customWeeks === 1 ? '1 week' : `${customWeeks} weeks`}</span>
-                      <span>{customHoursPerDay}h/day</span>
-                      <span>{customWeeks * customHoursPerDay * 7}h total</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
             </>
           )}
-
-          <div className='rounded-xl border border-border/70 bg-background/60 p-4'>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <p className='text-sm font-semibold text-foreground'>Plan Snapshot</p>
-                <p className='mt-1 text-sm text-muted-foreground'>
-                  {activeTemplate
-                    ? `${activeTemplate.name} targets ${format(effectiveTargetDate, 'PPP')} at ${effectiveDailyHours}h per day.`
-                    : `Select weeks and hours above to preview your plan.`}
-                </p>
-              </div>
-              {activeTemplate && <Badge variant='outline'>{activeTemplate.targetAudience}</Badge>}
-            </div>
-
-            <div className='mt-4 grid gap-3 sm:grid-cols-3'>
-              <div>
-                <p className='text-xs uppercase tracking-[0.14em] text-muted-foreground'>Exam Date</p>
-                <p className='mt-1 text-sm font-semibold text-foreground'>
-                  {effectiveTargetDate ? format(effectiveTargetDate, 'PPP') : 'Not selected'}
-                </p>
-              </div>
-              <div>
-                <p className='text-xs uppercase tracking-[0.14em] text-muted-foreground'>Daily Pace</p>
-                <p className='mt-1 text-sm font-semibold text-foreground'>{effectiveDailyHours}h per day</p>
-              </div>
-              <div>
-                <p className='text-xs uppercase tracking-[0.14em] text-muted-foreground'>Estimated Hours</p>
-                <p className='mt-1 text-sm font-semibold text-foreground'>{totalHours > 0 ? `${totalHours} total hours` : 'Pick a future date'}</p>
-              </div>
-            </div>
-          </div>
 
           {error && <p className='text-sm text-destructive'>{error}</p>}
 

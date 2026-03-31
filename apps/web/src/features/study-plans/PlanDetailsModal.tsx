@@ -1,11 +1,13 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { Check, Copy, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { StudyMaterialItem, StudyPlanTemplate } from '@/lib/api/study-plans';
+import type { StudyTaskItem, WeekSchedule } from '@aws-exam-prep/types';
 
 export interface GeneratedWeekMaterialItem {
   externalResourceId: string;
@@ -56,6 +58,213 @@ export interface PlanDetailsModalProps {
   isLoadingPreview?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  scheduleWeeks?: WeekSchedule[];
+}
+
+const SCHEDULE_TYPE_LABELS: Record<string, string> = {
+  read: 'Docs',
+  quiz: 'Quiz',
+  flashcard: 'Flashcard',
+  mock_exam: 'Practice Test',
+  review: 'Review',
+  course: 'Course',
+  video: 'Video',
+};
+
+function fmtMin(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function fmtFullDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function fmtDateRangePrompt(start: string, end: string): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return (
+    new Date(start + 'T00:00:00').toLocaleDateString('en-US', opts) +
+    ' – ' +
+    new Date(end + 'T00:00:00').toLocaleDateString('en-US', opts)
+  );
+}
+
+function buildSchedulePrompt(weeks: WeekSchedule[], materials: StudyMaterialItem[]): string {
+  const materialById = new Map(materials.map((m) => [m.id, m]));
+  const materialByTopicTitle = new Map<string, StudyMaterialItem>();
+  for (const material of materials) {
+    if (!material.topicTitle || !material.url) continue;
+    const key = material.topicTitle.trim().toLowerCase();
+    const existing = materialByTopicTitle.get(key);
+    if (!existing || material.priority < existing.priority) {
+      materialByTopicTitle.set(key, material);
+    }
+  }
+
+  const totalTasks = weeks.reduce((s, w) => s + w.tasks.length, 0);
+  const totalMin = weeks.reduce((s, w) => s + w.tasks.reduce((ts, t) => ts + t.estimatedMinutes, 0), 0);
+
+  const lines: string[] = [
+    '# AWS Certification Study Plan – Full Course Schedule',
+    '',
+    `${weeks.length} weeks · ${totalTasks} tasks · ${fmtMin(totalMin)} total`,
+    '',
+    'Please review this study schedule and validate:',
+    '1. The logical progression of topics week by week',
+    '2. The time estimates for each task',
+    '3. Whether the provided links are appropriate for the topics',
+    '4. Any gaps or overlaps in the learning path',
+    '',
+  ];
+
+  for (const week of weeks) {
+    const weekMin = week.tasks.reduce((s, t) => s + t.estimatedMinutes, 0);
+    lines.push(`## Week ${week.weekNumber} (${fmtDateRangePrompt(week.startDate, week.endDate)}) — ${fmtMin(weekMin)} total`);
+    lines.push('');
+
+    const tasksByDate = new Map<string, StudyTaskItem[]>();
+    for (const task of week.tasks) {
+      const existing = tasksByDate.get(task.scheduledDate) ?? [];
+      existing.push(task);
+      tasksByDate.set(task.scheduledDate, existing);
+    }
+
+    for (const date of Array.from(tasksByDate.keys()).sort()) {
+      const dayTasks = tasksByDate.get(date) ?? [];
+      const dayMin = dayTasks.reduce((s, t) => s + t.estimatedMinutes, 0);
+      lines.push(`### ${fmtFullDate(date)} — ${fmtMin(dayMin)}`);
+
+      for (const task of dayTasks) {
+        const material = task.externalResourceId
+          ? materialById.get(task.externalResourceId)
+          : task.type === 'quiz' && task.topicTitle
+            ? materialByTopicTitle.get(task.topicTitle.trim().toLowerCase())
+            : undefined;
+
+        const url =
+          task.type !== 'quiz' && task.type !== 'flashcard'
+            ? (material?.url ?? task.topicResourceUrl ?? null)
+            : null;
+
+        const label = SCHEDULE_TYPE_LABELS[task.type] ?? task.type;
+        const title = task.title ?? task.topicTitle ?? label;
+        const statusSuffix =
+          task.status === 'completed' ? ' ✓' :
+          task.status === 'in_progress' ? ' ⏳' :
+          task.status === 'carried_over' ? ' ⚠ missed' : '';
+
+        lines.push(
+          url
+            ? `- [${title}](${url}) (${label}, ${fmtMin(task.estimatedMinutes)})${statusSuffix}`
+            : `- ${title} (${label}, ${fmtMin(task.estimatedMinutes)})${statusSuffix}`,
+        );
+      }
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function buildPreviewPrompt(
+  template: StudyPlanTemplate,
+  materials: StudyMaterialItem[],
+  detailsSummary: GeneratedPlanDetailsSummary | null | undefined,
+): string {
+  const materialById = new Map(materials.map((m) => [m.id, m]));
+
+  const lines: string[] = [
+    '# AWS Certification Study Plan – AI Validation Request',
+    '',
+    `Please review the following study plan for the **AWS certification** and provide feedback on:`,
+    '- Coverage of exam domains and topics',
+    '- Pacing and time allocation per phase',
+    '- Quality and relevance of selected materials',
+    '- Any gaps or improvements you recommend',
+    '',
+    '---',
+    '',
+    `## Plan: ${template.name}`,
+    `**Description**: ${template.description}`,
+    `**Target Audience**: ${template.targetAudience}`,
+    `**Duration**: ${template.recommendedWeeks} weeks`,
+    `**Daily Commitment**: ${template.recommendedDailyHours} hours/day`,
+    `**Total Hours**: ${template.totalHours} hours`,
+    `**Tagline**: ${template.tagline}`,
+    '',
+  ];
+
+  if (detailsSummary && detailsSummary.weeksSummary.length > 0) {
+    lines.push('## Week-by-Week Breakdown', '');
+
+    lines.push(
+      `**Totals**: ${detailsSummary.totals.flashcards} flashcards, ` +
+        `${detailsSummary.totals.quizzes} quizzes, ` +
+        `${detailsSummary.totals.mockExams} mock exams` +
+        (detailsSummary.totals.practiceTests > 0 ? `, ${detailsSummary.totals.practiceTests} practice tests` : ''),
+    );
+    lines.push('');
+
+    for (const week of detailsSummary.weeksSummary) {
+      lines.push(`### Week ${week.weekNumber} (${fmtDateRangePrompt(week.startDate, week.endDate)})`);
+      lines.push(week.description);
+      lines.push('');
+
+      const counts: string[] = [];
+      if (week.flashcards > 0) counts.push(`${week.flashcards} flashcards`);
+      if (week.quizzes > 0) counts.push(`${week.quizzes} quizzes`);
+      if (week.mockExams > 0) counts.push(`${week.mockExams} mock exams`);
+      if (week.practiceTests > 0) counts.push(`${week.practiceTests} practice tests`);
+      if (counts.length > 0) lines.push(`Activities: ${counts.join(', ')}`);
+
+      if (week.materials.length > 0) {
+        lines.push('');
+        lines.push('**Materials:**');
+        for (const m of week.materials) {
+          const full = materialById.get(m.externalResourceId);
+          const typeLabel = MATERIAL_TYPE_LABELS[m.type] ?? m.type;
+          const freeLabel = full?.isFree != null ? (full.isFree ? 'Free' : 'Paid') : '';
+          const topic = full?.domainName ?? full?.topicTitle ?? '';
+          lines.push(`- **${m.title}** (${typeLabel})${freeLabel ? ` – ${freeLabel}` : ''}${topic ? ` | ${topic}` : ''}`);
+          if (full?.url) lines.push(`  URL: ${full.url}`);
+        }
+      }
+      lines.push('');
+    }
+  } else {
+    lines.push('## Phase-by-Phase Breakdown', '');
+
+    for (const phase of template.phases) {
+      const startWeek = phase.weekNumbers[0] ?? 1;
+      const endWeek = phase.weekNumbers[phase.weekNumbers.length - 1] ?? startWeek;
+      const weekLabel = startWeek === endWeek ? `Week ${startWeek}` : `Weeks ${startWeek}–${endWeek}`;
+
+      lines.push(`### ${phase.name} (${weekLabel})`);
+      lines.push(phase.description);
+
+      if (phase.resources.length > 0) {
+        lines.push('');
+        lines.push('**Materials:**');
+        for (const r of phase.resources) {
+          const full = materialById.get(r.id);
+          const typeLabel = MATERIAL_TYPE_LABELS[r.type] ?? r.type;
+          const freeLabel = full?.isFree != null ? (full.isFree ? 'Free' : 'Paid') : '';
+          const topic = full?.domainName ?? full?.topicTitle ?? '';
+          lines.push(`- **${r.title}** (${typeLabel})${freeLabel ? ` – ${freeLabel}` : ''}${topic ? ` | ${topic}` : ''}`);
+          if (full?.url) lines.push(`  URL: ${full.url}`);
+        }
+      }
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
 }
 
 function formatDateRange(start: string, end: string): string {
@@ -65,10 +274,31 @@ function formatDateRange(start: string, end: string): string {
   return `${from} - ${to}`;
 }
 
-export function PlanDetailsModal({ template, materials, detailsSummary, isLoadingPreview, open, onOpenChange }: PlanDetailsModalProps) {
+export function PlanDetailsModal({ template, materials, detailsSummary, isLoadingPreview, open, onOpenChange, scheduleWeeks }: PlanDetailsModalProps) {
+  const [promptCopied, setPromptCopied] = useState(false);
+
   if (!template && !detailsSummary) return null;
 
   const materialById = new Map(materials.map((m) => [m.id, m]));
+
+  const hasSchedule = scheduleWeeks && scheduleWeeks.length > 0;
+  const hasPreviewData = template !== null;
+  const canCopyPrompt = hasSchedule || hasPreviewData;
+
+  function handleCopyPrompt(): void {
+    let text: string;
+    if (hasSchedule) {
+      text = buildSchedulePrompt(scheduleWeeks, materials);
+    } else if (template) {
+      text = buildPreviewPrompt(template, materials, detailsSummary);
+    } else {
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => { setPromptCopied(false); }, 2000);
+    });
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -79,6 +309,22 @@ export function PlanDetailsModal({ template, materials, detailsSummary, isLoadin
             {template?.description ?? 'Weekly learning summary with flashcard, quiz, and mock exam counts.'}
           </DialogDescription>
         </DialogHeader>
+
+        {canCopyPrompt && (
+          <div className='flex'>
+            <Button
+              variant='outline'
+              size='sm'
+              className='gap-1.5 text-xs'
+              onClick={handleCopyPrompt}
+            >
+              {promptCopied
+                ? <Check className='h-3.5 w-3.5 text-emerald-500' />
+                : <Copy className='h-3.5 w-3.5' />}
+              {promptCopied ? 'Copied!' : 'Copy Prompt'}
+            </Button>
+          </div>
+        )}
 
         {isLoadingPreview && !detailsSummary && (
           <div className='flex items-center justify-center py-12'>

@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PlanDetailsModal } from '@/features/study-plans/PlanDetailsModal';
 import type { GeneratedPlanDetailsSummary } from '@/features/study-plans/PlanDetailsModal';
 import type { StudyMaterialItem, StudyPlanTemplate } from '@/lib/api/study-plans';
-import type { DashboardStudyPlan } from '@aws-exam-prep/types';
+import type { DashboardStudyPlan, WeekSchedule } from '@aws-exam-prep/types';
 
 interface ActiveStudyPlanProps {
   studyPlan: DashboardStudyPlan;
@@ -17,9 +17,10 @@ interface ActiveStudyPlanProps {
   detailsSummary?: GeneratedPlanDetailsSummary | null;
   isResetting?: boolean;
   onReset?: () => void;
+  scheduleWeeks?: WeekSchedule[] | undefined;
 }
 
-export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting, onReset }: ActiveStudyPlanProps) {
+export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting, onReset, scheduleWeeks }: ActiveStudyPlanProps) {
   const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [template, setTemplate] = useState<StudyPlanTemplate | null>(null);
@@ -150,6 +151,7 @@ export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting,
         detailsSummary={detailsSummary ?? null}
         open={detailsOpen && !templateLoading && !templateError}
         onOpenChange={setDetailsOpen}
+        scheduleWeeks={scheduleWeeks}
       />
     </Card>
   );

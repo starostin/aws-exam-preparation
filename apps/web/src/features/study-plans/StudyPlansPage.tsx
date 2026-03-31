@@ -1,18 +1,17 @@
 'use client';
 
-import { Check, ChevronDown, Copy, Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
 import { fetchCertifications, fetchDashboard, fetchPlanSchedule, fetchStudyMaterials, rescheduleTask, resetStudyPlan } from '@/lib/api/study-plans';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { ActiveStudyPlan } from '@/features/study-plans/ActiveStudyPlan';
 import { PlanScheduleView } from '@/features/study-plans/PlanScheduleView';
 import { StudyPlanSetup } from '@/features/dashboard/StudyPlanSetup';
 import { TaskList } from '@/features/dashboard/TaskList';
-import type { DashboardResponse, PlanScheduleResponse, StudyTaskItem, TaskStatus, WeekSchedule } from '@aws-exam-prep/types';
+import type { DashboardResponse, PlanScheduleResponse, StudyTaskItem, TaskStatus } from '@aws-exam-prep/types';
 import type { CertificationItem, StudyMaterialItem } from '@/lib/api/study-plans';
 
 interface WeeklyDetailsSummary {
@@ -35,117 +34,6 @@ interface PlanDetailsSummary {
     practiceTests: number;
   };
   weeksSummary: WeeklyDetailsSummary[];
-}
-
-const SCHEDULE_TYPE_LABELS: Record<string, string> = {
-  read: 'Docs',
-  quiz: 'Quiz',
-  flashcard: 'Flashcard',
-  mock_exam: 'Practice Test',
-  review: 'Review',
-  course: 'Course',
-  video: 'Video',
-};
-
-function fmtMin(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function fmtFullDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function fmtDateRange(start: string, end: string): string {
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return (
-    new Date(start + 'T00:00:00').toLocaleDateString('en-US', opts) +
-    ' – ' +
-    new Date(end + 'T00:00:00').toLocaleDateString('en-US', opts)
-  );
-}
-
-function buildSchedulePrompt(weeks: WeekSchedule[], materials: StudyMaterialItem[]): string {
-  const materialById = new Map(materials.map((m) => [m.id, m]));
-  const materialByTopicTitle = new Map<string, StudyMaterialItem>();
-  for (const material of materials) {
-    if (!material.topicTitle || !material.url) continue;
-    const key = material.topicTitle.trim().toLowerCase();
-    const existing = materialByTopicTitle.get(key);
-    if (!existing || material.priority < existing.priority) {
-      materialByTopicTitle.set(key, material);
-    }
-  }
-
-  const totalTasks = weeks.reduce((s, w) => s + w.tasks.length, 0);
-  const totalMin = weeks.reduce((s, w) => s + w.tasks.reduce((ts, t) => ts + t.estimatedMinutes, 0), 0);
-
-  const lines: string[] = [
-    '# AWS Certification Study Plan – Full Course Schedule',
-    '',
-    `${weeks.length} weeks · ${totalTasks} tasks · ${fmtMin(totalMin)} total`,
-    '',
-    'Please review this study schedule and validate:',
-    '1. The logical progression of topics week by week',
-    '2. The time estimates for each task',
-    '3. Whether the provided links are appropriate for the topics',
-    '4. Any gaps or overlaps in the learning path',
-    '',
-  ];
-
-  for (const week of weeks) {
-    const weekMin = week.tasks.reduce((s, t) => s + t.estimatedMinutes, 0);
-    lines.push(`## Week ${week.weekNumber} (${fmtDateRange(week.startDate, week.endDate)}) — ${fmtMin(weekMin)} total`);
-    lines.push('');
-
-    const tasksByDate = new Map<string, StudyTaskItem[]>();
-    for (const task of week.tasks) {
-      const existing = tasksByDate.get(task.scheduledDate) ?? [];
-      existing.push(task);
-      tasksByDate.set(task.scheduledDate, existing);
-    }
-
-    for (const date of Array.from(tasksByDate.keys()).sort()) {
-      const dayTasks = tasksByDate.get(date) ?? [];
-      const dayMin = dayTasks.reduce((s, t) => s + t.estimatedMinutes, 0);
-      lines.push(`### ${fmtFullDate(date)} — ${fmtMin(dayMin)}`);
-
-      for (const task of dayTasks) {
-        const material = task.externalResourceId
-          ? materialById.get(task.externalResourceId)
-          : task.type === 'quiz' && task.topicTitle
-            ? materialByTopicTitle.get(task.topicTitle.trim().toLowerCase())
-            : undefined;
-
-        const url =
-          task.type !== 'quiz' && task.type !== 'flashcard'
-            ? (material?.url ?? task.topicResourceUrl ?? null)
-            : null;
-
-        const label = SCHEDULE_TYPE_LABELS[task.type] ?? task.type;
-        const title = task.title ?? task.topicTitle ?? label;
-        const statusSuffix =
-          task.status === 'completed' ? ' ✓' :
-          task.status === 'in_progress' ? ' ⏳' :
-          task.status === 'carried_over' ? ' ⚠ missed' : '';
-
-        lines.push(
-          url
-            ? `- [${title}](${url}) (${label}, ${fmtMin(task.estimatedMinutes)})${statusSuffix}`
-            : `- ${title} (${label}, ${fmtMin(task.estimatedMinutes)})${statusSuffix}`,
-        );
-      }
-      lines.push('');
-    }
-  }
-
-  return lines.join('\n');
 }
 
 export function StudyPlansPage() {
@@ -288,7 +176,6 @@ export function StudyPlansPage() {
   }
 
   const [carriedOverExpanded, setCarriedOverExpanded] = useState(false);
-  const [scheduleCopied, setScheduleCopied] = useState(false);
 
   if (isLoading) {
     return <p className='text-sm text-muted-foreground'>Loading study plans...</p>;
@@ -331,6 +218,7 @@ export function StudyPlansPage() {
             onReset={() => { void handleResetStudyPlan(); }}
             detailsSummary={scheduleDetails}
             token={token}
+            scheduleWeeks={schedule?.weeks}
           />
 
           {token && dashboard && dashboard.carryOverTasks.length > 0 && (
@@ -421,27 +309,6 @@ export function StudyPlansPage() {
                   )}
                 />
               </button>
-              {schedule && (
-                <div className='pr-3 shrink-0'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    className='gap-1.5 text-xs'
-                    onClick={() => {
-                      const text = buildSchedulePrompt(schedule.weeks, planMaterials);
-                      void navigator.clipboard.writeText(text).then(() => {
-                        setScheduleCopied(true);
-                        setTimeout(() => { setScheduleCopied(false); }, 2000);
-                      });
-                    }}
-                  >
-                    {scheduleCopied
-                      ? <Check className='h-3.5 w-3.5 text-emerald-500' />
-                      : <Copy className='h-3.5 w-3.5' />}
-                    {scheduleCopied ? 'Copied!' : 'Copy as Prompt'}
-                  </Button>
-                </div>
-              )}
             </div>
             {scheduleExpanded && (
               <CardContent>

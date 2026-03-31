@@ -197,7 +197,7 @@ export const SAA_RESOURCES: SeedResource[] = [
     provider: 'Udemy',
     level: 'intermediate',
     tags: ['MUST-HAVE', 'exam-focused', 'concise'],
-    estimatedMinutes: 1600,
+    estimatedMinutes: 1630,
   },
   {
     title: 'SAA-C03 Course by Tutorials Dojo (Jon Bonso)',
@@ -241,7 +241,7 @@ export const SAA_RESOURCES: SeedResource[] = [
   {
     title: 'Official AWS Practice Question Set',
     description: 'A free 20-question sampler from AWS to get used to the official wording and interface.',
-    url: 'https://explore.skillbuilder.aws/learn/course/external/view/elearning/12485/aws-certified-solutions-architect-associate-official-practice-question-set',
+    url: 'https://skillbuilder.aws/learn/6NV91XYP1P/official-practice-question-set-aws-certified-solutions-architect--associate-saac03--english/N1HSPV1K17',
     type: 'practice_test',
     priority: 2,
     isFree: true,
@@ -265,7 +265,7 @@ export const SAA_RESOURCES: SeedResource[] = [
   {
     title: 'Tutorials Dojo AWS Cheat Sheets',
     description: 'Quick-reference summary tables comparing key services (ECS vs EKS, SQS vs SNS, NAT Gateway vs NAT Instance, EBS types, RDS engines, etc.). Invaluable for last-minute consolidation before the exam.',
-    url: 'https://tutorialsdojo.com/aws-certified-solutions-architect-associate-saa-c03/',
+    url: 'https://tutorialsdojo.com/aws-cheat-sheets/',
     type: 'docs',
     priority: 2,
     isFree: false,
@@ -279,7 +279,7 @@ export const SAA_RESOURCES: SeedResource[] = [
   {
     title: 'SAA-C03 Exam Guide',
     description: 'Start here. The official blueprint defining every domain, task statement, and in-scope service. Required reading before anything else.',
-    url: 'https://d1.awsstatic.com/training-and-certification/docs-sa-assoc/AWS-Certified-Solutions-Architect-Associate_Exam-Guide.pdf',
+    url: 'https://docs.aws.amazon.com/aws-certification/latest/solutions-architect-associate-03/solutions-architect-associate-03.html',
     type: 'docs',
     priority: 1,
     isFree: true,
@@ -292,7 +292,7 @@ export const SAA_RESOURCES: SeedResource[] = [
   {
     title: 'AWS Skill Builder: SAA-C03 Learning Plan',
     description: "AWS's official structured learning path with free video modules covering all exam domains.",
-    url: 'https://explore.skillbuilder.aws/learn/public/learning_plan/view/1044/solutions-architect-associate-learning-plan',
+    url: 'https://skillbuilder.aws/learning-plan/UYRXS2DF85/exam-prep-plan-aws-certified-solutions-architect--associate-saac03--english/U991QUF9C3',
     type: 'course',
     priority: 2,
     isFree: true,

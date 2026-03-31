@@ -200,7 +200,7 @@ export const MAAREK_SAA_COURSE: SaaCourse = {
   provider: 'Udemy',
   url: 'https://www.udemy.com/course/aws-certified-solutions-architect-associate-saa-c03/',
   isFree: false,
-  totalMinutes: 1620,
+  totalMinutes: 1634,
   sections: [
     {
       slug: 'getting-started',
