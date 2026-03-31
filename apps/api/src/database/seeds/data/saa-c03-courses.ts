@@ -224,7 +224,7 @@ export const MAAREK_SAA_COURSE: SaaCourse = {
       slug: 'ec2-saa-level',
       title: 'EC2 — Solutions Architect Level',
       estimatedMinutes: 130,
-      topicSlugs: ['multi-tier-fault-tolerant-architecture', 'compute-selection-and-scaling'],
+      topicSlugs: ['compute-cost-optimization', 'multi-tier-fault-tolerant-architecture', 'compute-selection-and-scaling'],
     },
     {
       slug: 'ec2-instance-storage',

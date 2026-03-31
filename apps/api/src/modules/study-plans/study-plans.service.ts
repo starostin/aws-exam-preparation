@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../../database/schema';
@@ -787,7 +787,7 @@ export class StudyPlansService {
       const sections = topicSectionMap.get(topic.id) ?? [];
       const topicDocs = topicDocMap.get(topic.id) ?? [];
       const hasQuiz = quizTopicIds.has(topic.id);
-      const hasFlashcard = flashcardTopicIds.has(topic.id);
+      const hasFlashcard = flashcardTopicIds.has(topic.id) && sections.length > 0;
 
       if (sections.length === 0 && topicDocs.length === 0 && !hasQuiz && !hasFlashcard) {
         // Fallback: no course section and no docs for this topic — plain read task
@@ -960,6 +960,43 @@ export class StudyPlansService {
           plannedMinutes: TASK_MINUTES['flashcard']!,
         });
         dayRemaining -= TASK_MINUTES['flashcard']!;
+      }
+    }
+
+    // ── 9b-catch-up. Ensure quiz/flashcard tasks for topics skipped by budget ──
+    // Short plans may run out of schedule days before reaching every topic.
+    // Quiz (10 min) and flashcard (10 min) are lightweight reinforcement tasks
+    // that should always be present, so append them to the last scheduled day.
+    const scheduledTopicIds = new Set(
+      tasksToInsert.map((t) => t.topicId).filter((id): id is string => id !== null && id !== undefined),
+    );
+    const catchUpDate = scheduleDates[Math.min(dateIndex, scheduleDates.length - 1)];
+    if (catchUpDate) {
+      for (const topic of [...topicsWithSections, ...topicsWithoutSections]) {
+        if (scheduledTopicIds.has(topic.id)) continue;
+        const hasQuiz = quizTopicIds.has(topic.id);
+        const hasFlashcard = flashcardTopicIds.has(topic.id) && topicSectionMap.has(topic.id);
+        if (!hasQuiz && !hasFlashcard) continue;
+        if (hasQuiz) {
+          pushTask({
+            studyPlanId,
+            topicId: topic.id,
+            type: 'quiz',
+            status: 'pending',
+            scheduledDate: catchUpDate,
+            plannedMinutes: TASK_MINUTES['quiz']!,
+          });
+        }
+        if (hasFlashcard) {
+          pushTask({
+            studyPlanId,
+            topicId: topic.id,
+            type: 'flashcard',
+            status: 'pending',
+            scheduledDate: catchUpDate,
+            plannedMinutes: TASK_MINUTES['flashcard']!,
+          });
+        }
       }
     }
 
@@ -1241,6 +1278,8 @@ export class StudyPlansService {
       return { studyPlan: null, todaysTasks: [], carryOverTasks: [], upcomingTasks: [], stats: emptyStats };
     }
 
+    await this.repairLegacyTopiclessTasks(plan);
+
     const today = toDateString(new Date());
     const nextWeek = toDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
@@ -1256,8 +1295,27 @@ export class StudyPlansService {
         ),
       );
 
-    // Generate today's tasks if none exist yet
-    await this.generateTodaysTasks(userId, plan, today);
+    // Do not auto-inject spaced-repetition flashcard tasks during dashboard load.
+    // The dashboard should show only the plan's explicitly scheduled tasks.
+
+    const materialTopicRows = await this.db
+      .selectDistinct({ topicId: schema.studyTasks.topicId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, plan.id),
+          inArray(schema.studyTasks.type, ['course', 'video']),
+          sql`${schema.studyTasks.topicId} IS NOT NULL`,
+          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+        ),
+      );
+    const materialTopicIds = new Set(
+      materialTopicRows
+        .map((row) => row.topicId)
+        .filter((id): id is string => id !== null),
+    );
+
+    await this.cleanupOrphanFlashcardTasks(plan.id, materialTopicIds);
 
     // Fetch today's tasks + carried-over tasks
     const rawTasks = await this.db
@@ -1295,6 +1353,10 @@ export class StudyPlansService {
     const carryOverTasks: StudyTaskItem[] = [];
 
     for (const row of rawTasks) {
+      if (row.type === 'flashcard' && (!row.topicId || !materialTopicIds.has(row.topicId))) {
+        continue;
+      }
+
       const item: StudyTaskItem = {
         id: row.id,
         topicId: row.topicId ?? null,
@@ -1348,6 +1410,10 @@ export class StudyPlansService {
 
     const upcomingByDate = new Map<string, StudyTaskItem[]>();
     for (const row of rawUpcoming) {
+      if (row.type === 'flashcard' && (!row.topicId || !materialTopicIds.has(row.topicId))) {
+        continue;
+      }
+
       const dateKey = String(row.scheduledDate);
       const item: StudyTaskItem = {
         id: row.id,
@@ -1401,6 +1467,27 @@ export class StudyPlansService {
       };
     }
 
+    await this.repairLegacyTopiclessTasks(plan);
+
+    const materialTopicRows = await this.db
+      .selectDistinct({ topicId: schema.studyTasks.topicId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, plan.id),
+          inArray(schema.studyTasks.type, ['course', 'video']),
+          sql`${schema.studyTasks.topicId} IS NOT NULL`,
+          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+        ),
+      );
+    const materialTopicIds = new Set(
+      materialTopicRows
+        .map((row) => row.topicId)
+        .filter((id): id is string => id !== null),
+    );
+
+    await this.cleanupOrphanFlashcardTasks(plan.id, materialTopicIds);
+
     const rawTasks = await this.db
       .select({
         id: schema.studyTasks.id,
@@ -1441,6 +1528,10 @@ export class StudyPlansService {
     // Pre-creating all weeks from 1..totalWeeks caused empty weeks to appear
     // when content didn't span the entire date range.
     for (const row of rawTasks) {
+      if (row.type === 'flashcard' && (!row.topicId || !materialTopicIds.has(row.topicId))) {
+        continue;
+      }
+
       const taskDate = new Date(String(row.scheduledDate) + 'T00:00:00');
       const daysDiff = Math.floor((taskDate.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24));
       const weekNumber = Math.floor(daysDiff / 7) + 1;
@@ -1537,6 +1628,50 @@ export class StudyPlansService {
 
   // ─── Task generation ────────────────────────────────────────────────────────
 
+  /**
+   * Repairs legacy plans that still contain topic-less quiz/flashcard tasks.
+   * These tasks cause incorrect grouping/fetching in the dashboard UI.
+   *
+   * We rebuild non-completed tasks using the current scheduler and preserve
+   * completed progress via regenerateResourceTasks' completed-minutes logic.
+   */
+  private async repairLegacyTopiclessTasks(plan: PlanRow): Promise<void> {
+    const [legacyRow] = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, plan.id),
+          inArray(schema.studyTasks.type, ['quiz', 'flashcard']),
+          isNull(schema.studyTasks.topicId),
+        ),
+      );
+
+    if (!legacyRow || Number(legacyRow.count) === 0) return;
+
+    const selectedResourceRows = await this.db
+      .selectDistinct({ externalResourceId: schema.studyTasks.externalResourceId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, plan.id),
+          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+        ),
+      );
+
+    const selectedMaterialIds = selectedResourceRows
+      .map((row) => row.externalResourceId)
+      .filter((id): id is string => !!id);
+
+    await this.regenerateResourceTasks(
+      plan.id,
+      plan.certificationId,
+      plan.dailyHours,
+      plan.targetDate,
+      selectedMaterialIds,
+    );
+  }
+
   private async generateTodaysTasks(
     userId: string,
     plan: PlanRow,
@@ -1548,6 +1683,7 @@ export class StudyPlansService {
     const todaysExistingTasks = await this.db
       .select({
         type: schema.studyTasks.type,
+        topicId: schema.studyTasks.topicId,
         plannedMinutes: schema.studyTasks.plannedMinutes,
       })
       .from(schema.studyTasks)
@@ -1563,8 +1699,31 @@ export class StudyPlansService {
       budgetRemaining -= task.plannedMinutes ?? TASK_MINUTES[task.type] ?? 30;
     }
 
+    // Keep auto-generated spaced-repetition tasks predictable: if there is
+    // already a flashcard task today (scheduled or previously generated),
+    // do not add more on every dashboard refresh.
+    const hasFlashcardTaskToday = todaysExistingTasks.some((task) => task.type === 'flashcard');
+    if (hasFlashcardTaskToday) return;
+
     const flashcardCost = TASK_MINUTES['flashcard']!;
     if (budgetRemaining < flashcardCost) return;
+
+    const materialTopicRows = await this.db
+      .selectDistinct({ topicId: schema.studyTasks.topicId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, plan.id),
+          inArray(schema.studyTasks.type, ['course', 'video']),
+          sql`${schema.studyTasks.topicId} IS NOT NULL`,
+          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+        ),
+      );
+    const materialTopicIds = materialTopicRows
+      .map((row) => row.topicId)
+      .filter((id): id is string => id !== null);
+
+    if (materialTopicIds.length === 0) return;
 
     const dueFlashcards = await this.db
       .select({ topicId: schema.flashcards.topicId })
@@ -1574,9 +1733,10 @@ export class StudyPlansService {
         and(
           eq(schema.reviewSchedules.userId, userId),
           lte(schema.reviewSchedules.nextReviewAt, new Date()),
+          inArray(schema.flashcards.topicId, materialTopicIds),
         ),
       )
-      .limit(Math.floor(budgetRemaining / flashcardCost));
+      .limit(1);
 
     const tasksToInsert: (typeof schema.studyTasks.$inferInsert)[] = [];
     for (const fc of dueFlashcards) {
@@ -1601,6 +1761,37 @@ export class StudyPlansService {
         throw error;
       }
     }
+  }
+
+  private async cleanupOrphanFlashcardTasks(
+    studyPlanId: string,
+    materialTopicIds: Set<string>,
+  ): Promise<void> {
+    const baseConditions = [
+      eq(schema.studyTasks.studyPlanId, studyPlanId),
+      eq(schema.studyTasks.type, 'flashcard'),
+      inArray(schema.studyTasks.status, ['pending', 'in_progress', 'carried_over']),
+    ] as const;
+
+    if (materialTopicIds.size === 0) {
+      await this.db
+        .delete(schema.studyTasks)
+        .where(and(...baseConditions));
+      return;
+    }
+
+    const allowedTopicIds = Array.from(materialTopicIds);
+    await this.db
+      .delete(schema.studyTasks)
+      .where(
+        and(
+          ...baseConditions,
+          or(
+            isNull(schema.studyTasks.topicId),
+            notInArray(schema.studyTasks.topicId, allowedTopicIds),
+          ),
+        ),
+      );
   }
 
   // ─── Stats ──────────────────────────────────────────────────────────────────

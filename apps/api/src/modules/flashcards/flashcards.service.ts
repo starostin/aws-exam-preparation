@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type {
   FlashcardConfidence,
@@ -29,10 +29,53 @@ export class FlashcardsService {
     private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
+  private async getActivePlanMaterialTopicIds(
+    userId: string,
+    certificationId?: string,
+  ): Promise<Set<string> | null> {
+    const planRows = await this.db
+      .select({
+        id: schema.studyPlans.id,
+        certificationId: schema.studyPlans.certificationId,
+      })
+      .from(schema.studyPlans)
+      .where(eq(schema.studyPlans.userId, userId))
+      .orderBy(desc(schema.studyPlans.createdAt));
+
+    const activePlan = certificationId
+      ? planRows.find((row) => row.certificationId === certificationId)
+      : planRows[0];
+
+    if (!activePlan) return null;
+
+    const materialTopicRows = await this.db
+      .selectDistinct({ topicId: schema.studyTasks.topicId })
+      .from(schema.studyTasks)
+      .where(
+        and(
+          eq(schema.studyTasks.studyPlanId, activePlan.id),
+          inArray(schema.studyTasks.type, ['course', 'video']),
+          sql`${schema.studyTasks.topicId} IS NOT NULL`,
+          sql`${schema.studyTasks.externalResourceId} IS NOT NULL`,
+        ),
+      );
+
+    return new Set(
+      materialTopicRows
+        .map((row) => row.topicId)
+        .filter((id): id is string => id !== null),
+    );
+  }
+
   async listTopics(userId: string, certificationId?: string): Promise<FlashcardTopicSummary[]> {
     const certificationCondition = certificationId
       ? eq(schema.certifications.id, certificationId)
       : eq(schema.certifications.code, 'SAA-C03');
+
+    const materialTopicIds = await this.getActivePlanMaterialTopicIds(userId, certificationId);
+    if (materialTopicIds !== null && materialTopicIds.size === 0) {
+      return [];
+    }
 
     const now = new Date();
 
@@ -55,7 +98,14 @@ export class FlashcardsService {
           eq(schema.reviewSchedules.userId, userId),
         ),
       )
-      .where(certificationCondition)
+      .where(
+        and(
+          certificationCondition,
+          materialTopicIds === null
+            ? sql`TRUE`
+            : inArray(schema.topics.id, Array.from(materialTopicIds)),
+        ),
+      )
       .groupBy(schema.topics.id, schema.topics.title, schema.domains.name)
       .orderBy(schema.domains.name, schema.topics.title);
 
@@ -76,6 +126,15 @@ export class FlashcardsService {
         ? eq(schema.certifications.id, dto.certificationId)
         : eq(schema.certifications.code, 'SAA-C03'),
     ];
+
+    const materialTopicIds = await this.getActivePlanMaterialTopicIds(userId, dto.certificationId);
+    if (materialTopicIds !== null && materialTopicIds.size === 0) {
+      return [];
+    }
+
+    if (materialTopicIds !== null) {
+      conditions.push(inArray(schema.flashcards.topicId, Array.from(materialTopicIds)));
+    }
 
     if (dto.topicId) {
       conditions.push(eq(schema.flashcards.topicId, dto.topicId));
