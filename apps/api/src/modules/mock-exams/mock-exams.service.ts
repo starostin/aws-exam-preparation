@@ -1,14 +1,16 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type {
   CompleteMockExamAttemptResponse,
   MockExamAttemptHistoryItem,
   MockExamAttemptProgressResponse,
   MockExamQuestionsPageResponse,
+  MockExamStatsResponse,
   MockExamSummary,
   PublicQuizOption,
   QuestionDifficulty,
+  ResetMockExamStatsResponse,
   StartMockExamAttemptResponse,
   SubmitMockExamAnswerResponse,
 } from '@aws-exam-prep/types';
@@ -387,6 +389,47 @@ export class MockExamsService {
       completedAt: updatedAttempt.completedAt.toISOString(),
       reviewItems,
     };
+  }
+
+  async getStats(userId: string): Promise<MockExamStatsResponse> {
+    const [overall] = await this.db
+      .select({
+        totalAttempts: sql<number>`COUNT(*)`,
+        completedAttempts: sql<number>`SUM(CASE WHEN ${schema.mockExamAttempts.status} = 'completed' THEN 1 ELSE 0 END)`,
+        inProgressAttempts: sql<number>`SUM(CASE WHEN ${schema.mockExamAttempts.status} = 'in_progress' THEN 1 ELSE 0 END)`,
+        averageScore: sql<number>`AVG(${schema.mockExamAttempts.score})`,
+        bestScore: sql<number>`MAX(${schema.mockExamAttempts.score})`,
+      })
+      .from(schema.mockExamAttempts)
+      .where(eq(schema.mockExamAttempts.userId, userId));
+
+    return {
+      totalAttempts: Number(overall?.totalAttempts ?? 0),
+      completedAttempts: Number(overall?.completedAttempts ?? 0),
+      inProgressAttempts: Number(overall?.inProgressAttempts ?? 0),
+      averageScore: overall?.averageScore != null ? Number(overall.averageScore) : null,
+      bestScore: overall?.bestScore != null ? Number(overall.bestScore) : null,
+    };
+  }
+
+  async resetStats(userId: string): Promise<ResetMockExamStatsResponse> {
+    await this.db.transaction(async (tx) => {
+      const attemptRows = await tx
+        .select({ id: schema.mockExamAttempts.id })
+        .from(schema.mockExamAttempts)
+        .where(eq(schema.mockExamAttempts.userId, userId));
+
+      const attemptIds = attemptRows.map((row) => row.id);
+      if (attemptIds.length > 0) {
+        await tx
+          .delete(schema.mockExamAttemptQuestions)
+          .where(inArray(schema.mockExamAttemptQuestions.attemptId, attemptIds));
+      }
+
+      await tx.delete(schema.mockExamAttempts).where(eq(schema.mockExamAttempts.userId, userId));
+    });
+
+    return { message: 'Mock exam stats reset successfully.' };
   }
 
   private async getOwnedAttempt(userId: string, attemptId: string): Promise<{

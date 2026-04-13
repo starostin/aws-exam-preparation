@@ -5,7 +5,7 @@ const QUIZ_MODES = ['topic', 'mixed'] as const;
 const QUESTION_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
 const QUESTION_SELECTIONS = ['all', 'unanswered'] as const;
 
-export class ListQuizQuestionsDto {
+export class StartQuizAttemptDto {
   @IsOptional()
   @IsIn(QUIZ_MODES)
   mode?: (typeof QUIZ_MODES)[number];
@@ -30,6 +30,6 @@ export class ListQuizQuestionsDto {
   @Transform(({ value }: { value: unknown }) => Number(value))
   @IsInt()
   @Min(1)
-  @Max(50)
+  @Max(500)
   limit?: number;
 }

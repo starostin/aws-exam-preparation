@@ -5,11 +5,21 @@ import Link from 'next/link';
 import { ChevronLeft, Loader2, RotateCcw, Trophy } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { fetchDueFlashcards, fetchFlashcards, submitFlashcardReview } from '@/lib/api/flashcards';
+import {
+  completeFlashcardSession,
+  fetchFlashcardSession,
+  fetchFlashcardSessionCards,
+  startFlashcardSession,
+  submitFlashcardSessionReview,
+} from '@/lib/api/flashcards';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { FlashcardWithReview } from '@aws-exam-prep/types';
+import type {
+  CompleteFlashcardSessionResponse,
+  FlashcardSessionCardItem,
+  FlashcardSessionProgressResponse,
+} from '@aws-exam-prep/types';
 
 const CONFIDENCE_LABELS: Record<number, string> = {
   1: 'Again',
@@ -31,13 +41,18 @@ export function FlashcardReviewPage() {
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
+  const querySessionId = searchParams.get('sessionId') ?? undefined;
   const topicId = searchParams.get('topicId') ?? undefined;
   const dueOnly = searchParams.get('dueOnly') === 'true';
 
+  const [sessionId, setSessionId] = useState<string | null>(querySessionId ?? null);
   const [token, setToken] = useState<string | null>(null);
-  const [cards, setCards] = useState<FlashcardWithReview[]>([]);
+  const [session, setSession] = useState<FlashcardSessionProgressResponse | null>(null);
+  const [cards, setCards] = useState<FlashcardSessionCardItem[]>([]);
+  const [completion, setCompletion] = useState<CompleteFlashcardSessionResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -50,6 +65,26 @@ export function FlashcardReviewPage() {
   const submittingRef = useRef(false);
 
   const currentCard = cards[currentIndex] ?? null;
+
+  async function loadAllSessionCards(accessToken: string, activeSessionId: string): Promise<FlashcardSessionCardItem[]> {
+    const pageSize = 500;
+    let page = 1;
+    let totalCards = 0;
+    const allItems: FlashcardSessionCardItem[] = [];
+
+    do {
+      const response = await fetchFlashcardSessionCards(accessToken, activeSessionId, page, pageSize);
+      totalCards = response.totalCards;
+      allItems.push(...response.items);
+      page += 1;
+    } while (allItems.length < totalCards && totalCards > 0);
+
+    return allItems;
+  }
+
+  function findFirstUnreviewedIndex(items: FlashcardSessionCardItem[]): number {
+    return items.findIndex((item) => item.reviewedAt == null);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -65,30 +100,60 @@ export function FlashcardReviewPage() {
         const accessToken = data.session?.access_token;
         if (!accessToken) throw new Error('Not authenticated. Please sign in.');
 
-        const cardData = dueOnly
-          ? await fetchDueFlashcards(accessToken, topicId)
-          : await fetchFlashcards(accessToken, topicId ? { topicId } : {});
+        let activeSessionId = sessionId;
+        if (!activeSessionId) {
+          const startedSession = await startFlashcardSession(accessToken, {
+            ...(topicId ? { topicId } : {}),
+            filter: dueOnly ? 'due_only' : 'all',
+          });
+          activeSessionId = startedSession.sessionId;
+        }
+
+        if (!activeSessionId) {
+          throw new Error('Unable to start or load flashcard session.');
+        }
+
+        const sessionProgress = await fetchFlashcardSession(accessToken, activeSessionId);
+        const sessionCards = await loadAllSessionCards(accessToken, activeSessionId);
 
         if (!isMounted) return;
 
-        if (cardData.length === 0) {
-          setError(
-            dueOnly
-              ? 'No cards are due for review right now. Come back later or review all cards.'
-              : 'No flashcards found for this topic.',
-          );
-          setCards([]);
-          setIsLoading(false);
+        setSessionId(activeSessionId);
+        setToken(accessToken);
+        setSession(sessionProgress);
+        setCards(sessionCards);
+
+        const reviewed = sessionCards.filter((item) => item.reviewedAt != null);
+        const reviewedConfidenceValues = reviewed
+          .map((item) => item.confidence ?? 0)
+          .filter((value) => value > 0);
+        const initialConfidenceSum = reviewedConfidenceValues.reduce<number>((sum, value) => sum + value, 0);
+
+        setReviewedCount(reviewed.length);
+        setConfidenceSum(initialConfidenceSum);
+
+        const firstUnreviewedIndex = findFirstUnreviewedIndex(sessionCards);
+        setCurrentIndex(firstUnreviewedIndex >= 0 ? firstUnreviewedIndex : 0);
+        setIsFlipped(false);
+
+        if (sessionProgress.status === 'completed') {
+          const completed = await completeFlashcardSession(accessToken, activeSessionId);
+          if (!isMounted) return;
+          setCompletion(completed);
+          setSessionDone(true);
           return;
         }
 
-        setToken(accessToken);
-        setCards(cardData);
-        setCurrentIndex(0);
-        setIsFlipped(false);
+        if (sessionProgress.reviewedCards >= sessionProgress.totalCards && sessionProgress.totalCards > 0) {
+          const completed = await completeFlashcardSession(accessToken, activeSessionId);
+          if (!isMounted) return;
+          setCompletion(completed);
+          setSessionDone(true);
+          return;
+        }
+
+        setCompletion(null);
         setSessionDone(false);
-        setReviewedCount(0);
-        setConfidenceSum(0);
       } catch (err) {
         if (!isMounted) return;
         setError(err instanceof Error ? err.message : 'Failed to load flashcards.');
@@ -101,41 +166,60 @@ export function FlashcardReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [dueOnly, supabase, topicId]);
+  }, [dueOnly, sessionId, supabase, topicId]);
 
   async function handleRate(confidence: number): Promise<void> {
-    if (!currentCard || !token || submittingRef.current) return;
+    if (!currentCard || !token || !sessionId || submittingRef.current) return;
 
     submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
-      await submitFlashcardReview(token, {
-        flashcardId: currentCard.id,
+      await submitFlashcardSessionReview(token, sessionId, {
+        flashcardId: currentCard.card.id,
         confidence: confidence as 1 | 2 | 3 | 4 | 5,
       });
 
-      const nextIndex = currentIndex + 1;
+      const nowIso = new Date().toISOString();
+      setCards((previous) => previous.map((item) => (
+        item.sessionCardId === currentCard.sessionCardId
+          ? {
+              ...item,
+              confidence: confidence as 1 | 2 | 3 | 4 | 5,
+              reviewedAt: nowIso,
+            }
+          : item
+      )));
+
+      setSession((previous) => previous ? {
+        ...previous,
+        reviewedCards: Math.min(previous.totalCards, previous.reviewedCards + 1),
+      } : previous);
+
       setReviewedCount((c) => c + 1);
       setConfidenceSum((s) => s + confidence);
 
-      if (nextIndex >= cards.length) {
-        setSessionDone(true);
+      const nextUnreviewedIndex = cards.findIndex((item, idx) => idx > currentIndex && item.reviewedAt == null);
+      if (nextUnreviewedIndex >= 0) {
+        setCurrentIndex(nextUnreviewedIndex);
+        setIsFlipped(false);
       } else {
-        setCurrentIndex(nextIndex);
+        setIsCompleting(true);
+        const completed = await completeFlashcardSession(token, sessionId);
+        setCompletion(completed);
+        setSessionDone(true);
         setIsFlipped(false);
       }
     } catch {
       setError('Failed to save your rating. Please try again.');
     } finally {
       setIsSubmitting(false);
+      setIsCompleting(false);
       submittingRef.current = false;
     }
   }
 
-  const backHref: Route = topicId
-    ? (`/flashcards?topicId=${topicId}` as Route)
-    : '/flashcards';
+  const backHref: Route = '/flashcards';
 
   if (isLoading) {
     return (
@@ -157,8 +241,8 @@ export function FlashcardReviewPage() {
     );
   }
 
-  if (sessionDone) {
-    const avgConfidence = reviewedCount > 0 ? confidenceSum / reviewedCount : 0;
+  if (sessionDone && completion) {
+    const avgConfidence = completion.averageConfidence ?? (reviewedCount > 0 ? confidenceSum / reviewedCount : 0);
     const avgLabel = avgConfidence >= 4.5 ? 'Excellent' : avgConfidence >= 3 ? 'Good' : 'Needs work';
 
     return (
@@ -166,12 +250,12 @@ export function FlashcardReviewPage() {
         <Trophy className="h-16 w-16 text-yellow-500" />
         <div>
           <h2 className="text-2xl font-bold">Session Complete!</h2>
-          <p className="text-muted-foreground mt-1">You reviewed {reviewedCount} flashcard{reviewedCount !== 1 ? 's' : ''}.</p>
+          <p className="text-muted-foreground mt-1">You reviewed {completion.reviewedCards} flashcard{completion.reviewedCards !== 1 ? 's' : ''}.</p>
         </div>
         <div className="w-full rounded-lg border p-4 text-sm space-y-2">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Cards reviewed</span>
-            <span className="font-medium">{reviewedCount}</span>
+            <span className="font-medium">{completion.reviewedCards}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Average confidence</span>
@@ -184,8 +268,9 @@ export function FlashcardReviewPage() {
               setCurrentIndex(0);
               setIsFlipped(false);
               setSessionDone(false);
-              setReviewedCount(0);
-              setConfidenceSum(0);
+              setSessionId(null);
+              setSession(null);
+              setCompletion(null);
             }}
             variant="outline"
             className="gap-2"
@@ -201,7 +286,7 @@ export function FlashcardReviewPage() {
     );
   }
 
-  if (!currentCard) return null;
+  if (!currentCard || !session) return null;
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -213,19 +298,19 @@ export function FlashcardReviewPage() {
           </Link>
         </Button>
         <span className="text-sm text-muted-foreground ml-auto">
-          {currentIndex + 1} / {cards.length}
+          {session.reviewedCards} reviewed • {currentIndex + 1} / {cards.length}
         </span>
       </div>
 
       <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-        {currentCard.topicTitle}
+        {currentCard.card.topicTitle}
       </div>
 
       {/* Progress bar */}
       <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
         <div
           className="h-full bg-primary rounded-full transition-all duration-300"
-          style={{ width: `${((currentIndex) / cards.length) * 100}%` }}
+          style={{ width: `${session.totalCards > 0 ? (session.reviewedCards / session.totalCards) * 100 : 0}%` }}
         />
       </div>
 
@@ -257,7 +342,7 @@ export function FlashcardReviewPage() {
             style={{ backfaceVisibility: 'hidden' }}
           >
             <CardContent className="flex flex-col items-center justify-center h-full min-h-[260px] p-8 text-center gap-4">
-              <p className="text-lg font-medium leading-relaxed">{currentCard.front}</p>
+              <p className="text-lg font-medium leading-relaxed">{currentCard.card.front}</p>
               {!isFlipped && (
                 <p className="text-xs text-muted-foreground mt-4">Click to reveal answer</p>
               )}
@@ -270,7 +355,7 @@ export function FlashcardReviewPage() {
             style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
           >
             <CardContent className="flex flex-col items-start justify-center h-full min-h-[260px] p-8">
-              <p className="text-sm leading-relaxed whitespace-pre-line">{currentCard.back}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-line">{currentCard.card.back}</p>
             </CardContent>
           </Card>
         </div>
@@ -284,7 +369,7 @@ export function FlashcardReviewPage() {
             {[1, 2, 3, 4, 5].map((level) => (
               <button
                 key={level}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isCompleting}
                 onClick={() => { void handleRate(level); }}
                 title={CONFIDENCE_DESCRIPTIONS[level]}
                 className={[

@@ -10,10 +10,12 @@ import {
   fetchMockExamAttempt,
   fetchMockExamQuestions,
   submitMockExamAnswer,
-  type CompleteMockExamAttemptResponse,
-  type MockExamAttemptProgressResponse,
-  type MockExamAttemptQuestionItem,
 } from '@/lib/api/mock-exams';
+import type {
+  CompleteMockExamAttemptResponse,
+  MockExamAttemptProgressResponse,
+  MockExamAttemptQuestionItem,
+} from '@aws-exam-prep/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type {
   CompleteMockExamAttemptResponse,
   MockExamAttemptHistoryItem,
+  MockExamStatsResponse,
   MockExamAttemptProgressResponse,
   MockExamQuestionsPageResponse,
   MockExamSummary,
+  ResetMockExamStatsResponse,
   StartMockExamAttemptResponse,
   SubmitMockExamAnswerResponse,
 } from '@aws-exam-prep/types';
@@ -74,5 +76,15 @@ export class MockExamsController {
     @Param('attemptId') attemptId: string,
   ): Promise<CompleteMockExamAttemptResponse> {
     return await this.mockExamsService.completeAttempt(user.id, attemptId);
+  }
+
+  @Get('stats')
+  async getStats(@CurrentUser() user: AuthUser): Promise<MockExamStatsResponse> {
+    return await this.mockExamsService.getStats(user.id);
+  }
+
+  @Patch('stats/reset')
+  async resetStats(@CurrentUser() user: AuthUser): Promise<ResetMockExamStatsResponse> {
+    return await this.mockExamsService.resetStats(user.id);
   }
 }

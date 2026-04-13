@@ -2,10 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Trophy } from 'lucide-react';
+import { CheckCircle2, Clock3, Loader2, Play, Target, Trophy, XCircle } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-browser';
-import { fetchMockExamAttemptHistory, fetchMockExams, startMockExamAttempt } from '@/lib/api/mock-exams';
-import type { MockExamAttemptHistoryItem, MockExamSummary } from '@/lib/api/mock-exams';
+import {
+  fetchMockExamAttemptHistory,
+  fetchMockExams,
+  fetchMockExamStats,
+  resetMockExamStats,
+  startMockExamAttempt,
+} from '@/lib/api/mock-exams';
+import type { MockExamAttemptHistoryItem, MockExamStatsResponse, MockExamSummary } from '@aws-exam-prep/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,9 +28,12 @@ export function MockExamsPage() {
   const [token, setToken] = useState<string | null>(null);
   const [exams, setExams] = useState<MockExamSummary[]>([]);
   const [history, setHistory] = useState<MockExamAttemptHistoryItem[]>([]);
+  const [stats, setStats] = useState<MockExamStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [startingExamId, setStartingExamId] = useState<string | null>(null);
   const [openingAttemptId, setOpeningAttemptId] = useState<string | null>(null);
+  const [isResettingStats, setIsResettingStats] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,6 +42,7 @@ export function MockExamsPage() {
     async function loadData(): Promise<void> {
       setIsLoading(true);
       setError(null);
+      setResetMessage(null);
       try {
         const { data, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw new Error(sessionError.message);
@@ -43,14 +53,16 @@ export function MockExamsPage() {
 
         setToken(accessToken);
 
-        const [examRows, historyRows] = await Promise.all([
+        const [examRows, historyRows, statsResponse] = await Promise.all([
           fetchMockExams(accessToken),
           fetchMockExamAttemptHistory(accessToken),
+          fetchMockExamStats(accessToken),
         ]);
 
         if (!isMounted) return;
         setExams(examRows);
         setHistory(historyRows);
+        setStats(statsResponse);
       } catch (loadError) {
         if (!isMounted) return;
         setError(loadError instanceof Error ? loadError.message : 'Failed to load mock exams.');
@@ -84,6 +96,59 @@ export function MockExamsPage() {
     router.push(`/mock-exams/session?attemptId=${attemptId}`);
   }
 
+  async function handleResetMockExamStats(): Promise<void> {
+    if (!token) return;
+    if (!window.confirm('Are you sure you want to reset all mock exam stats and history? This cannot be undone.')) {
+      return;
+    }
+
+    setIsResettingStats(true);
+    setResetMessage(null);
+    setError(null);
+
+    try {
+      const response = await resetMockExamStats(token);
+      const [historyRows, statsResponse] = await Promise.all([
+        fetchMockExamAttemptHistory(token),
+        fetchMockExamStats(token),
+      ]);
+      setHistory(historyRows);
+      setStats(statsResponse);
+      setResetMessage(response.message);
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : 'Failed to reset mock exam stats.');
+    } finally {
+      setIsResettingStats(false);
+    }
+  }
+
+  const activeAttempts = useMemo(
+    () => history.filter((attempt) => attempt.status === 'in_progress'),
+    [history],
+  );
+
+  const completedAttempts = useMemo(
+    () => history.filter((attempt) => attempt.status === 'completed'),
+    [history],
+  );
+
+  const statsOverview = useMemo(() => {
+    const averageScore = stats?.averageScore != null ? Math.round(stats.averageScore) : 0;
+    const bestScore = stats?.bestScore != null ? Math.round(stats.bestScore) : 0;
+    const passRate = completedAttempts.length > 0
+      ? Math.round((completedAttempts.filter((attempt) => (attempt.score ?? 0) >= 72).length / completedAttempts.length) * 100)
+      : 0;
+
+    return {
+      totalAttempts: stats?.totalAttempts ?? 0,
+      completedAttempts: stats?.completedAttempts ?? 0,
+      inProgressAttempts: stats?.inProgressAttempts ?? 0,
+      averageScore,
+      bestScore,
+      passRate,
+    };
+  }, [completedAttempts, stats]);
+
   return (
     <div className='flex flex-col gap-6 pb-8 animate-rise-in'>
       <div className='space-y-2'>
@@ -97,12 +162,124 @@ export function MockExamsPage() {
         </p>
       </div>
 
+      {resetMessage ? (
+        <p className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200'>
+          {resetMessage}
+        </p>
+      ) : null}
+
       {error ? <p className='rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive'>{error}</p> : null}
+
+      <section className='grid gap-4 lg:grid-cols-12'>
+        <Card className='lg:col-span-8 overflow-hidden border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card/90 to-cyan-500/10'>
+          <CardHeader className='pb-4'>
+            <CardTitle className='flex items-center gap-2 text-xl'>
+              <Target className='h-5 w-5 text-amber-400' />
+              Mock Exam Snapshot
+            </CardTitle>
+            <CardDescription>Your progress across all mock exam attempts.</CardDescription>
+            <div>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='border-rose-500/40 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200'
+                onClick={() => { void handleResetMockExamStats(); }}
+                disabled={isResettingStats}
+              >
+                {isResettingStats ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                {isResettingStats ? 'Resetting...' : 'Reset Mock Exam Stats'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+            <div className='rounded-xl border border-border/70 bg-background/60 p-4'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Attempts</p>
+              <p className='mt-1 text-2xl font-semibold text-foreground'>{statsOverview.totalAttempts}</p>
+              <p className='mt-1 text-xs text-muted-foreground'>Total attempts started</p>
+            </div>
+            <div className='rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4'>
+              <p className='flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-300'>
+                <CheckCircle2 className='h-3.5 w-3.5' />
+                Completed
+              </p>
+              <p className='mt-1 text-2xl font-semibold text-emerald-200'>{statsOverview.completedAttempts}</p>
+              <p className='mt-1 text-xs text-emerald-200/80'>Finished exam attempts</p>
+            </div>
+            <div className='rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4'>
+              <p className='flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300'>
+                <Clock3 className='h-3.5 w-3.5' />
+                In Progress
+              </p>
+              <p className='mt-1 text-2xl font-semibold text-cyan-100'>{statsOverview.inProgressAttempts}</p>
+              <p className='mt-1 text-xs text-cyan-100/80'>Can be resumed anytime</p>
+            </div>
+            <div className='rounded-xl border border-rose-500/30 bg-rose-500/10 p-4'>
+              <p className='flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-300'>
+                <XCircle className='h-3.5 w-3.5' />
+                Pass Rate
+              </p>
+              <p className='mt-1 text-2xl font-semibold text-rose-200'>{statsOverview.passRate}%</p>
+              <p className='mt-1 text-xs text-rose-200/80'>Completed attempts with 72%+ score</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className='lg:col-span-4 border-border/70 bg-card/70'>
+          <CardHeader className='pb-3'>
+            <CardTitle className='text-base'>Scores</CardTitle>
+            <CardDescription>How your results trend over time.</CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='rounded-xl border border-border/70 bg-background/50 p-4'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Average Score</p>
+              <p className='mt-1 text-3xl font-semibold text-foreground'>{statsOverview.averageScore}%</p>
+            </div>
+            <div className='rounded-xl border border-border/70 bg-background/50 p-4'>
+              <p className='text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground'>Best Score</p>
+              <p className='mt-1 text-3xl font-semibold text-foreground'>{statsOverview.bestScore}%</p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {activeAttempts.length > 0 ? (
+        <Card className='border-border/70 bg-card/70'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <Clock3 className='h-5 w-5 text-cyan-500' />
+              Resume Unfinished Exam
+            </CardTitle>
+            <CardDescription>Your in-progress mock exams are saved and ready to continue.</CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3'>
+            {activeAttempts.map((attempt) => (
+              <div key={attempt.attemptId} className='flex flex-col gap-3 rounded-xl border border-border/70 bg-background/60 p-4 md:flex-row md:items-center md:justify-between'>
+                <div className='space-y-1'>
+                  <p className='text-sm font-medium text-foreground'>{attempt.mockExamTitle}</p>
+                  <p className='text-xs text-muted-foreground'>
+                    Started {formatDateTime(attempt.startedAt)}
+                  </p>
+                </div>
+                <Button
+                  type='button'
+                  className='bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                  disabled={openingAttemptId === attempt.attemptId}
+                  onClick={() => { handleResumeAttempt(attempt.attemptId); }}
+                >
+                  {openingAttemptId === attempt.attemptId ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                  Resume
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className='border-border/70 bg-card/70'>
         <CardHeader>
           <CardTitle>Available Mock Exams</CardTitle>
-          <CardDescription>Choose any exam and start a new attempt.</CardDescription>
+          <CardDescription>Choose any exam and start a new timed attempt.</CardDescription>
         </CardHeader>
         <CardContent className='space-y-3'>
           {isLoading ? <p className='text-sm text-muted-foreground'>Loading exams...</p> : null}
@@ -122,7 +299,7 @@ export function MockExamsPage() {
                 disabled={startingExamId === exam.id}
                 onClick={() => { void handleStartExam(exam.id); }}
               >
-                {startingExamId === exam.id ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                {startingExamId === exam.id ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : <Play className='mr-2 h-4 w-4' />}
                 Start Exam
               </Button>
             </div>
@@ -130,40 +307,6 @@ export function MockExamsPage() {
         </CardContent>
       </Card>
 
-      <Card className='border-border/70 bg-card/70'>
-        <CardHeader>
-          <CardTitle>Recent Attempts</CardTitle>
-          <CardDescription>Your latest mock exam history.</CardDescription>
-        </CardHeader>
-        <CardContent className='space-y-3'>
-          {isLoading ? <p className='text-sm text-muted-foreground'>Loading history...</p> : null}
-          {!isLoading && history.length === 0 ? <p className='text-sm text-muted-foreground'>No attempts yet.</p> : null}
-
-          {history.slice(0, 8).map((attempt) => (
-            <div key={attempt.attemptId} className='flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 p-3'>
-              <div className='space-y-1'>
-                <p className='text-sm font-semibold text-foreground'>{attempt.mockExamTitle}</p>
-                <p className='text-xs text-muted-foreground'>
-                  Status: {attempt.status.replace('_', ' ')} • Score: {attempt.score != null ? `${attempt.score}%` : 'N/A'}
-                </p>
-                <p className='text-xs text-muted-foreground'>Completed: {formatDateTime(attempt.completedAt)}</p>
-              </div>
-
-              {attempt.status === 'in_progress' ? (
-                <Button
-                  type='button'
-                  variant='outline'
-                  disabled={openingAttemptId === attempt.attemptId}
-                  onClick={() => { handleResumeAttempt(attempt.attemptId); }}
-                >
-                  {openingAttemptId === attempt.attemptId ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
-                  Continue Exam
-                </Button>
-              ) : null}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 }

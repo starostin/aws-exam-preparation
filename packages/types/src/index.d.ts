@@ -84,6 +84,8 @@ export interface QuizAttempt {
     attemptedAt: string;
 }
 export type QuizMode = "topic" | "mixed";
+export type QuizQuestionSelection = "all" | "unanswered";
+export type QuizSessionStatus = "in_progress" | "completed";
 export interface QuizTopicSummary {
     topicId: string;
     topicTitle: string;
@@ -95,6 +97,7 @@ export interface ListQuizQuestionsInput {
     topicId?: string;
     certificationId?: string;
     difficulty?: QuestionDifficulty;
+    selection?: QuizQuestionSelection;
     limit?: number;
 }
 export interface PublicQuizOption {
@@ -126,6 +129,68 @@ export interface SubmitQuizAttemptResponse {
     difficulty: QuestionDifficulty;
     attemptedAt: string;
 }
+export interface StartQuizAttemptInput {
+    mode?: QuizMode;
+    topicId?: string;
+    certificationId?: string;
+    difficulty?: QuestionDifficulty;
+    selection?: QuizQuestionSelection;
+    limit?: number;
+}
+export interface QuizAttemptSummary {
+    attemptId: string;
+    certificationId: string;
+    mode: QuizMode;
+    questionSelection: QuizQuestionSelection;
+    topicId: string | null;
+    topicTitle: string | null;
+    difficulty: QuestionDifficulty | null;
+    status: QuizSessionStatus;
+    totalQuestions: number;
+    answeredQuestions: number;
+    correctAnswers: number;
+    accuracy: number | null;
+    startedAt: string;
+    completedAt: string | null;
+}
+export interface StartQuizAttemptResponse extends QuizAttemptSummary {}
+export interface QuizAttemptProgressResponse extends QuizAttemptSummary {}
+export interface QuizAttemptQuestionItem {
+    attemptQuestionId: string;
+    questionOrder: number;
+    selectedOptionId: string | null;
+    answeredAt: string | null;
+    question: QuizQuestionItem;
+}
+export interface QuizAttemptQuestionsPageResponse {
+    attemptId: string;
+    page: number;
+    pageSize: number;
+    totalQuestions: number;
+    items: QuizAttemptQuestionItem[];
+}
+export interface SubmitQuizAnswerInput {
+    questionId: string;
+    selectedOptionId: string;
+}
+export interface SubmitQuizAnswerResponse {
+    attemptId: string;
+    questionId: string;
+    selectedOptionId: string;
+    isCorrect: boolean;
+    correctOptionId: string;
+    explanation: string;
+    answeredAt: string;
+}
+export interface CompleteQuizAttemptResponse {
+    attemptId: string;
+    status: QuizSessionStatus;
+    totalQuestions: number;
+    answeredQuestions: number;
+    correctAnswers: number;
+    accuracy: number;
+    completedAt: string;
+}
 export interface QuizTopicStats {
     topicId: string;
     topicTitle: string;
@@ -138,6 +203,9 @@ export interface QuizStatsResponse {
     correctAttempts: number;
     accuracy: number | null;
     byTopic: QuizTopicStats[];
+}
+export interface ResetQuizStatsResponse {
+    message: string;
 }
 export type MockExamStatus = "not_started" | "in_progress" | "completed";
 export interface MockExam {

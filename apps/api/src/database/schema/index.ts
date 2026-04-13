@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, boolean, integer, real, date, jsonb, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, boolean, integer, real, date, jsonb, pgEnum, uniqueIndex, index } from 'drizzle-orm/pg-core';
 
 // ─── Enumerations ──────────────────────────────────────────────────────────────
 
@@ -7,6 +7,10 @@ export const taskTypeEnum = pgEnum('task_type', ['read', 'quiz', 'flashcard', 'm
 export const taskStatusEnum = pgEnum('task_status', ['pending', 'in_progress', 'completed', 'carried_over']);
 export const mockExamStatusEnum = pgEnum('mock_exam_status', ['not_started', 'in_progress', 'completed']);
 export const questionDifficultyEnum = pgEnum('question_difficulty', ['easy', 'medium', 'hard']);
+export const quizModeEnum = pgEnum('quiz_mode', ['topic', 'mixed']);
+export const quizQuestionSelectionEnum = pgEnum('quiz_question_selection', ['all', 'unanswered']);
+export const quizSessionStatusEnum = pgEnum('quiz_session_status', ['in_progress', 'completed']);
+export const flashcardSessionStatusEnum = pgEnum('flashcard_session_status', ['in_progress', 'completed']);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +119,80 @@ export const quizAttempts = pgTable('quiz_attempts', {
   attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
 });
 
+export const questionStates = pgTable('question_states', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  questionId: uuid('question_id').notNull().references(() => quizQuestions.id),
+  latestSelectedOptionId: varchar('latest_selected_option_id', { length: 100 }),
+  latestIsCorrect: boolean('latest_is_correct'),
+  attemptsCount: integer('attempts_count').notNull().default(0),
+  firstAnsweredAt: timestamp('first_answered_at'),
+  lastAnsweredAt: timestamp('last_answered_at'),
+  lastIncorrectAt: timestamp('last_incorrect_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniqueUserQuestion: uniqueIndex('question_states_user_question_uidx').on(table.userId, table.questionId),
+  userCorrectIdx: index('question_states_user_correct_idx').on(table.userId, table.latestIsCorrect),
+  userAnsweredIdx: index('question_states_user_answered_idx').on(table.userId, table.lastAnsweredAt),
+}));
+
+export const questionAttempts = pgTable('question_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  questionId: uuid('question_id').notNull().references(() => quizQuestions.id),
+  selectedOptionId: varchar('selected_option_id', { length: 100 }).notNull(),
+  isCorrect: boolean('is_correct').notNull(),
+  attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
+}, (table) => ({
+  userQuestionAttemptedIdx: index('question_attempts_user_question_attempted_idx').on(
+    table.userId,
+    table.questionId,
+    table.attemptedAt,
+  ),
+}));
+
+export const quizSessionAttempts = pgTable('quiz_session_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  certificationId: uuid('certification_id').notNull().references(() => certifications.id),
+  topicId: uuid('topic_id').references(() => topics.id),
+  mode: quizModeEnum('mode').notNull(),
+  questionSelection: quizQuestionSelectionEnum('question_selection').notNull().default('all'),
+  difficulty: questionDifficultyEnum('difficulty'),
+  status: quizSessionStatusEnum('status').notNull().default('in_progress'),
+  totalQuestions: integer('total_questions').notNull(),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userStatusStartedIdx: index('quiz_session_attempts_user_status_started_idx').on(
+    table.userId,
+    table.status,
+    table.startedAt,
+  ),
+  certificationStartedIdx: index('quiz_session_attempts_certification_started_idx').on(
+    table.certificationId,
+    table.startedAt,
+  ),
+}));
+
+export const quizSessionQuestions = pgTable('quiz_session_questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  attemptId: uuid('attempt_id').notNull().references(() => quizSessionAttempts.id),
+  questionId: uuid('question_id').notNull().references(() => quizQuestions.id),
+  questionOrder: integer('question_order').notNull(),
+  selectedOptionId: varchar('selected_option_id', { length: 100 }),
+  isCorrect: boolean('is_correct'),
+  answeredAt: timestamp('answered_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniqueAttemptOrder: uniqueIndex('quiz_session_questions_attempt_order_uidx').on(table.attemptId, table.questionOrder),
+  uniqueAttemptQuestion: uniqueIndex('quiz_session_questions_attempt_question_uidx').on(table.attemptId, table.questionId),
+  attemptAnsweredIdx: index('quiz_session_questions_attempt_answered_idx').on(table.attemptId, table.answeredAt),
+}));
+
 // ─── Mock Exams ───────────────────────────────────────────────────────────────
 
 export const mockExams = pgTable('mock_exams', {
@@ -187,6 +265,46 @@ export const reviewSchedules = pgTable('review_schedules', {
   confidence: integer('confidence').notNull().default(1), // 1–5
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const flashcardReviewSessions = pgTable('flashcard_review_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  certificationId: uuid('certification_id').notNull().references(() => certifications.id),
+  topicId: uuid('topic_id').references(() => topics.id),
+  filter: varchar('filter', { length: 30 }).notNull().default('all'),
+  status: flashcardSessionStatusEnum('status').notNull().default('in_progress'),
+  totalCards: integer('total_cards').notNull(),
+  reviewedCards: integer('reviewed_cards').notNull().default(0),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userStatusStartedIdx: index('flashcard_review_sessions_user_status_started_idx').on(
+    table.userId,
+    table.status,
+    table.startedAt,
+  ),
+  userCertificationStartedIdx: index('flashcard_review_sessions_user_cert_started_idx').on(
+    table.userId,
+    table.certificationId,
+    table.startedAt,
+  ),
+}));
+
+export const flashcardReviewSessionCards = pgTable('flashcard_review_session_cards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id').notNull().references(() => flashcardReviewSessions.id),
+  flashcardId: uuid('flashcard_id').notNull().references(() => flashcards.id),
+  cardOrder: integer('card_order').notNull(),
+  confidence: integer('confidence'),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniqueSessionOrder: uniqueIndex('flashcard_review_session_cards_session_order_uidx').on(table.sessionId, table.cardOrder),
+  uniqueSessionFlashcard: uniqueIndex('flashcard_review_session_cards_session_flashcard_uidx').on(table.sessionId, table.flashcardId),
+  sessionReviewedIdx: index('flashcard_review_session_cards_session_reviewed_idx').on(table.sessionId, table.reviewedAt),
+}));
 
 // ─── Progress Snapshots ───────────────────────────────────────────────────────
 

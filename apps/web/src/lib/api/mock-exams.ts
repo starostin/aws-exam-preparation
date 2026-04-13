@@ -1,111 +1,16 @@
 import { apiClient } from './client';
-
-export interface MockExamSummary {
-  id: string;
-  certificationId: string;
-  certificationCode: string;
-  title: string;
-  durationMinutes: number;
-  totalQuestions: number;
-}
-
-export interface MockExamAttemptHistoryItem {
-  attemptId: string;
-  mockExamId: string;
-  mockExamTitle: string;
-  certificationId: string;
-  status: 'not_started' | 'in_progress' | 'completed';
-  score: number | null;
-  startedAt: string;
-  completedAt: string | null;
-}
-
-export interface StartMockExamAttemptResponse {
-  attemptId: string;
-  mockExamId: string;
-  title: string;
-  status: 'not_started' | 'in_progress' | 'completed';
-  durationMinutes: number;
-  totalQuestions: number;
-  answeredQuestions: number;
-  startedAt: string;
-}
-
-export interface MockExamAttemptProgressResponse {
-  attemptId: string;
-  mockExamId: string;
-  title: string;
-  status: 'not_started' | 'in_progress' | 'completed';
-  durationMinutes: number;
-  totalQuestions: number;
-  answeredQuestions: number;
-  startedAt: string;
-  completedAt: string | null;
-  score: number | null;
-}
-
-export interface MockExamAttemptQuestionItem {
-  attemptQuestionId: string;
-  questionOrder: number;
-  selectedOptionId: string | null;
-  answeredAt: string | null;
-  question: {
-    id: string;
-    topicId: string;
-    topicTitle: string;
-    domainName: string;
-    text: string;
-    options: Array<{ id: string; text: string }>;
-    difficulty: 'easy' | 'medium' | 'hard';
-  };
-}
-
-export interface MockExamQuestionsPageResponse {
-  attemptId: string;
-  page: number;
-  pageSize: number;
-  totalQuestions: number;
-  items: MockExamAttemptQuestionItem[];
-}
-
-export interface SubmitMockExamAnswerInput {
-  questionId: string;
-  selectedOptionId: string;
-}
-
-export interface SubmitMockExamAnswerResponse {
-  attemptId: string;
-  questionId: string;
-  selectedOptionId: string;
-  isCorrect: boolean;
-  correctOptionId: string;
-  explanation: string;
-  answeredAt: string;
-}
-
-export interface MockExamReviewItem {
-  questionId: string;
-  questionOrder: number;
-  topicTitle: string;
-  domainName: string;
-  questionText: string;
-  selectedOptionId: string | null;
-  selectedOptionText: string | null;
-  correctOptionId: string;
-  correctOptionText: string;
-  explanation: string;
-  isCorrect: boolean;
-}
-
-export interface CompleteMockExamAttemptResponse {
-  attemptId: string;
-  status: 'not_started' | 'in_progress' | 'completed';
-  score: number;
-  correctAnswers: number;
-  totalQuestions: number;
-  completedAt: string;
-  reviewItems: MockExamReviewItem[];
-}
+import type {
+  CompleteMockExamAttemptResponse,
+  MockExamAttemptHistoryItem,
+  MockExamAttemptProgressResponse,
+  MockExamQuestionsPageResponse,
+  MockExamStatsResponse,
+  MockExamSummary,
+  ResetMockExamStatsResponse,
+  StartMockExamAttemptResponse,
+  SubmitMockExamAnswerInput,
+  SubmitMockExamAnswerResponse,
+} from '@aws-exam-prep/types';
 
 export async function fetchMockExams(token: string, certificationId?: string): Promise<MockExamSummary[]> {
   const params = new URLSearchParams();
@@ -162,4 +67,12 @@ export async function completeMockExamAttempt(
   attemptId: string,
 ): Promise<CompleteMockExamAttemptResponse> {
   return apiClient.post<CompleteMockExamAttemptResponse>(`/v1/mock-exams/attempts/${attemptId}/complete`, {}, { token });
+}
+
+export async function fetchMockExamStats(token: string): Promise<MockExamStatsResponse> {
+  return apiClient.get<MockExamStatsResponse>('/v1/mock-exams/stats', { token });
+}
+
+export async function resetMockExamStats(token: string): Promise<ResetMockExamStatsResponse> {
+  return apiClient.patch<ResetMockExamStatsResponse>('/v1/mock-exams/stats/reset', {}, { token });
 }

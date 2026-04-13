@@ -151,7 +151,7 @@ export function ActiveStudyPlan({ studyPlan, token, detailsSummary, isResetting,
         detailsSummary={detailsSummary ?? null}
         open={detailsOpen && !templateLoading && !templateError}
         onOpenChange={setDetailsOpen}
-        scheduleWeeks={scheduleWeeks}
+        scheduleWeeks={scheduleWeeks ?? []}
       />
     </Card>
   );

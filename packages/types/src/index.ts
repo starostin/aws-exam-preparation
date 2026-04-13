@@ -107,6 +107,8 @@ export interface QuizAttempt {
 }
 
 export type QuizMode = "topic" | "mixed";
+export type QuizQuestionSelection = "all" | "unanswered";
+export type QuizSessionStatus = "in_progress" | "completed";
 
 export interface QuizTopicSummary {
   topicId: string;
@@ -120,6 +122,7 @@ export interface ListQuizQuestionsInput {
   topicId?: string;
   certificationId?: string;
   difficulty?: QuestionDifficulty;
+  selection?: QuizQuestionSelection;
   limit?: number;
 }
 
@@ -156,6 +159,77 @@ export interface SubmitQuizAttemptResponse {
   attemptedAt: string;
 }
 
+export interface StartQuizAttemptInput {
+  mode?: QuizMode;
+  topicId?: string;
+  certificationId?: string;
+  difficulty?: QuestionDifficulty;
+  selection?: QuizQuestionSelection;
+  limit?: number;
+}
+
+export interface QuizAttemptSummary {
+  attemptId: string;
+  certificationId: string;
+  mode: QuizMode;
+  questionSelection: QuizQuestionSelection;
+  topicId: string | null;
+  topicTitle: string | null;
+  difficulty: QuestionDifficulty | null;
+  status: QuizSessionStatus;
+  totalQuestions: number;
+  answeredQuestions: number;
+  correctAnswers: number;
+  accuracy: number | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface StartQuizAttemptResponse extends QuizAttemptSummary {}
+
+export interface QuizAttemptProgressResponse extends QuizAttemptSummary {}
+
+export interface QuizAttemptQuestionItem {
+  attemptQuestionId: string;
+  questionOrder: number;
+  selectedOptionId: string | null;
+  answeredAt: string | null;
+  question: QuizQuestionItem;
+}
+
+export interface QuizAttemptQuestionsPageResponse {
+  attemptId: string;
+  page: number;
+  pageSize: number;
+  totalQuestions: number;
+  items: QuizAttemptQuestionItem[];
+}
+
+export interface SubmitQuizAnswerInput {
+  questionId: string;
+  selectedOptionId: string;
+}
+
+export interface SubmitQuizAnswerResponse {
+  attemptId: string;
+  questionId: string;
+  selectedOptionId: string;
+  isCorrect: boolean;
+  correctOptionId: string;
+  explanation: string;
+  answeredAt: string;
+}
+
+export interface CompleteQuizAttemptResponse {
+  attemptId: string;
+  status: QuizSessionStatus;
+  totalQuestions: number;
+  answeredQuestions: number;
+  correctAnswers: number;
+  accuracy: number;
+  completedAt: string;
+}
+
 export interface QuizTopicStats {
   topicId: string;
   topicTitle: string;
@@ -169,6 +243,10 @@ export interface QuizStatsResponse {
   correctAttempts: number;
   accuracy: number | null;
   byTopic: QuizTopicStats[];
+}
+
+export interface ResetQuizStatsResponse {
+  message: string;
 }
 
 // ─── Mock Exams ───────────────────────────────────────────────────────────────
@@ -304,9 +382,23 @@ export interface MockExamAttemptHistoryItem {
   completedAt: string | null;
 }
 
+export interface MockExamStatsResponse {
+  totalAttempts: number;
+  completedAttempts: number;
+  inProgressAttempts: number;
+  averageScore: number | null;
+  bestScore: number | null;
+}
+
+export interface ResetMockExamStatsResponse {
+  message: string;
+}
+
 // ─── Flashcards ───────────────────────────────────────────────────────────────
 
 export type FlashcardConfidence = 1 | 2 | 3 | 4 | 5;
+export type FlashcardSessionStatus = "in_progress" | "completed";
+export type FlashcardSessionFilter = "all" | "due_only";
 
 export interface Flashcard {
   id: string;
@@ -352,6 +444,13 @@ export interface ListFlashcardsInput {
   dueOnly?: boolean;
 }
 
+export interface StartFlashcardSessionInput {
+  topicId?: string;
+  certificationId?: string;
+  filter?: FlashcardSessionFilter;
+  limit?: number;
+}
+
 export interface SubmitReviewInput {
   flashcardId: string;
   confidence: FlashcardConfidence;
@@ -365,11 +464,56 @@ export interface SubmitReviewResponse {
   updatedAt: string;
 }
 
+export interface FlashcardSessionSummary {
+  sessionId: string;
+  certificationId: string;
+  topicId: string | null;
+  topicTitle: string | null;
+  filter: FlashcardSessionFilter;
+  status: FlashcardSessionStatus;
+  totalCards: number;
+  reviewedCards: number;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface FlashcardSessionProgressResponse extends FlashcardSessionSummary {}
+
+export interface FlashcardSessionCardItem {
+  sessionCardId: string;
+  cardOrder: number;
+  confidence: FlashcardConfidence | null;
+  reviewedAt: string | null;
+  card: FlashcardWithReview;
+}
+
+export interface FlashcardSessionCardsPageResponse {
+  sessionId: string;
+  page: number;
+  pageSize: number;
+  totalCards: number;
+  items: FlashcardSessionCardItem[];
+}
+
+export interface CompleteFlashcardSessionResponse {
+  sessionId: string;
+  status: FlashcardSessionStatus;
+  totalCards: number;
+  reviewedCards: number;
+  averageConfidence: number | null;
+  completedAt: string;
+}
+
 export interface FlashcardStatsResponse {
   totalCards: number;
   reviewedCards: number;
   dueToday: number;
   averageConfidence: number | null;
+  inProgressSessions: number;
+}
+
+export interface ResetFlashcardStatsResponse {
+  message: string;
 }
 
 // ─── Progress & Readiness ─────────────────────────────────────────────────────

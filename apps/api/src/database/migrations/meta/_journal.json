@@ -50,6 +50,27 @@
       "when": 1775283600000,
       "tag": "0005_mock_exam_attempt_questions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0006_questions_progress_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776100000000,
+      "tag": "0007_quiz_session_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776200000000,
+      "tag": "0008_flashcard_review_sessions",
+      "breakpoints": true
     }
   ]
 }

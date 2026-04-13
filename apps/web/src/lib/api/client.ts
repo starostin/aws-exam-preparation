@@ -35,6 +35,7 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
 
   const response = await fetch(buildApiUrl(env.NEXT_PUBLIC_API_URL, path), {
     ...fetchOptions,
+    cache: 'no-store',
     headers,
   });
 

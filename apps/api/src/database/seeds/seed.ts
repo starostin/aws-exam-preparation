@@ -16,6 +16,7 @@ import { WAF_CATALOG } from './data/saa-c03-well-architected';
 import { TD_CATALOG } from './data/saa-c03-tutorials-dojo';
 import { SAA_STUDY_PLANS } from './data/saa-c03-study-plans';
 import { SAA_QUIZ_QUESTIONS, type SeedQuizQuestion } from './data/saa-c03-quizzes';
+import { SAA_C03_QUESTIONS } from './data/saa-c03-questions';
 import { SAA_FLASHCARDS, type SeedFlashcard } from './data/saa-c03-flashcards';
 import { SAA_MOCK_EXAMS, SAA_MOCK_EXAM_QUESTIONS, type SeedMockExam, type SeedMockExamQuestion } from './data/saa-c03-mock-exams';
 
@@ -23,6 +24,35 @@ type CertificationRow = typeof schema.certifications.$inferSelect;
 type DomainRow = typeof schema.domains.$inferSelect;
 type TopicRow = typeof schema.topics.$inferSelect;
 type ExternalResourceRow = typeof schema.externalResources.$inferSelect;
+
+function normalizeLegacyQuestionOptions(answerVariants: string[], correct: 'A' | 'B' | 'C' | 'D'): SeedQuizQuestion['options'] {
+  return answerVariants
+    .map((variant, index) => {
+      const match = variant.match(/^\s*([A-D])[.)]\s*(.+)$/i);
+      const letter = (match?.[1]?.toLowerCase() ?? ['a', 'b', 'c', 'd'][index] ?? 'a');
+      const text = (match?.[2] ?? variant).trim();
+
+      return {
+        id: letter,
+        text,
+        isCorrect: letter === correct.toLowerCase(),
+      };
+    })
+    .filter((option) => option.text.length > 0);
+}
+
+function buildSaaC03QuestionsFromLegacySource(): SeedQuizQuestion[] {
+  return SAA_C03_QUESTIONS
+    .filter((question) => Array.isArray(question.answerVariants) && question.answerVariants.length > 0)
+    .map((question) => ({
+      topicSlug: question.topicSlug,
+      text: question.question,
+      options: normalizeLegacyQuestionOptions(question.answerVariants, question.correctAnswerVariant),
+      explanation: question.answer,
+      difficulty: 'medium' as const,
+    }))
+    .filter((question) => question.options.length > 0);
+}
 
 function getDefaultResourcePriority(resource: SeedResource): number {
   if (resource.priority != null) {
@@ -479,12 +509,32 @@ async function runSeed(): Promise<void> {
       await upsertResource(db, certification.id, topicId, resource);
     }
 
+    const legacyQuizQuestions = buildSaaC03QuestionsFromLegacySource();
+
+    let skippedCoreQuizQuestions = 0;
+    let insertedCoreQuizQuestions = 0;
     for (const question of SAA_QUIZ_QUESTIONS) {
       const topicId = topicIdBySlug.get(question.topicSlug);
       if (!topicId) {
-        throw new Error(`Missing topic for quiz question (topicSlug: ${question.topicSlug})`);
+        skippedCoreQuizQuestions += 1;
+        continue;
       }
+
       await upsertQuizQuestion(db, topicId, question);
+      insertedCoreQuizQuestions += 1;
+    }
+
+    let skippedLegacyQuizQuestions = 0;
+    let insertedLegacyQuizQuestions = 0;
+    for (const question of legacyQuizQuestions) {
+      const topicId = topicIdBySlug.get(question.topicSlug);
+      if (!topicId) {
+        skippedLegacyQuizQuestions += 1;
+        continue;
+      }
+
+      await upsertQuizQuestion(db, topicId, question);
+      insertedLegacyQuizQuestions += 1;
     }
 
     for (const card of SAA_FLASHCARDS) {
@@ -517,7 +567,7 @@ async function runSeed(): Promise<void> {
 
     // Keep output concise for CI/local usage while still showing seed coverage.
     // eslint-disable-next-line no-console
-    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${allSeedResources.length} resources (${SAA_RESOURCES.length} core + ${SAA_WAF_RESOURCES.length} WAF + ${SAA_TD_RESOURCES.length} TD cheat sheets), ${SAA_STUDY_PLANS.length} plan templates (static), ${SAA_QUIZ_QUESTIONS.length} quiz questions, ${SAA_FLASHCARDS.length} flashcards, ${SAA_MOCK_EXAMS.length} mock exams, ${SAA_MOCK_EXAM_QUESTIONS.length} mock exam questions.`);
+    console.log(`Seed completed: ${SAA_DOMAINS.length} domains, ${SAA_TOPICS.length} topics, ${allSeedResources.length} resources (${SAA_RESOURCES.length} core + ${SAA_WAF_RESOURCES.length} WAF + ${SAA_TD_RESOURCES.length} TD cheat sheets), ${SAA_STUDY_PLANS.length} plan templates (static), ${insertedCoreQuizQuestions + insertedLegacyQuizQuestions} quiz questions (${insertedCoreQuizQuestions} core + ${insertedLegacyQuizQuestions} legacy, ${skippedCoreQuizQuestions + skippedLegacyQuizQuestions} skipped unknown-topic), ${SAA_FLASHCARDS.length} flashcards, ${SAA_MOCK_EXAMS.length} mock exams, ${SAA_MOCK_EXAM_QUESTIONS.length} mock exam questions.`);
   } finally {
     await pool.end();
   }

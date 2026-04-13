@@ -17,7 +17,17 @@ import { GamificationModule } from './modules/gamification/gamification.module';
 @Module({
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [appConfig], cache: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      load: [appConfig],
+      envFilePath: [
+        'apps/api/.env.local',
+        'apps/api/.env',
+        '.env.local',
+        '.env',
+      ],
+    }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     DatabaseModule,
     AuthModule,

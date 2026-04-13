@@ -1,9 +1,15 @@
 import { apiClient } from './client';
 import type {
+  CompleteFlashcardSessionResponse,
+  FlashcardSessionCardsPageResponse,
+  FlashcardSessionProgressResponse,
+  FlashcardSessionSummary,
   FlashcardStatsResponse,
   FlashcardTopicSummary,
   FlashcardWithReview,
   ListFlashcardsInput,
+  ResetFlashcardStatsResponse,
+  StartFlashcardSessionInput,
   SubmitReviewInput,
   SubmitReviewResponse,
 } from '@aws-exam-prep/types';
@@ -51,6 +57,57 @@ export async function submitFlashcardReview(
   return apiClient.post<SubmitReviewResponse>('/v1/flashcards/review', input, { token });
 }
 
+export async function fetchFlashcardSessionHistory(
+  token: string,
+  certificationId?: string,
+): Promise<FlashcardSessionSummary[]> {
+  const params = new URLSearchParams();
+  if (certificationId) params.set('certificationId', certificationId);
+  const query = params.toString();
+  return apiClient.get<FlashcardSessionSummary[]>(`/v1/flashcards/sessions/history${query ? `?${query}` : ''}`, { token });
+}
+
+export async function startFlashcardSession(
+  token: string,
+  input: StartFlashcardSessionInput,
+): Promise<FlashcardSessionProgressResponse> {
+  return apiClient.post<FlashcardSessionProgressResponse>('/v1/flashcards/sessions/start', input, { token });
+}
+
+export async function fetchFlashcardSession(
+  token: string,
+  sessionId: string,
+): Promise<FlashcardSessionProgressResponse> {
+  return apiClient.get<FlashcardSessionProgressResponse>(`/v1/flashcards/sessions/${sessionId}`, { token });
+}
+
+export async function fetchFlashcardSessionCards(
+  token: string,
+  sessionId: string,
+  page: number,
+  pageSize = 200,
+): Promise<FlashcardSessionCardsPageResponse> {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  return apiClient.get<FlashcardSessionCardsPageResponse>(`/v1/flashcards/sessions/${sessionId}/cards?${params.toString()}`, { token });
+}
+
+export async function submitFlashcardSessionReview(
+  token: string,
+  sessionId: string,
+  input: SubmitReviewInput,
+): Promise<SubmitReviewResponse> {
+  return apiClient.post<SubmitReviewResponse>(`/v1/flashcards/sessions/${sessionId}/review`, input, { token });
+}
+
+export async function completeFlashcardSession(
+  token: string,
+  sessionId: string,
+): Promise<CompleteFlashcardSessionResponse> {
+  return apiClient.post<CompleteFlashcardSessionResponse>(`/v1/flashcards/sessions/${sessionId}/complete`, {}, { token });
+}
+
 export async function fetchFlashcardStats(
   token: string,
   certificationId?: string,
@@ -59,4 +116,8 @@ export async function fetchFlashcardStats(
   if (certificationId) params.set('certificationId', certificationId);
   const query = params.toString();
   return apiClient.get<FlashcardStatsResponse>(`/v1/flashcards/stats${query ? `?${query}` : ''}`, { token });
+}
+
+export async function resetFlashcardStats(token: string): Promise<ResetFlashcardStatsResponse> {
+  return apiClient.patch<ResetFlashcardStatsResponse>('/v1/flashcards/stats/reset', {}, { token });
 }
