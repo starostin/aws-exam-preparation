@@ -39,6 +39,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is the role of an Application Load Balancer health check in a fault-tolerant architecture?',
     back: 'The ALB periodically sends HTTP/HTTPS requests to each registered target. If a target fails the health check threshold, the ALB stops routing traffic to it. Traffic shifts automatically to healthy instances, preventing users from hitting a broken backend.',
   },
+  {
+    topicSlug: 'multi-tier-fault-tolerant-architecture',
+    front: 'Why should an Auto Scaling group span multiple Availability Zones?',
+    back: 'If one Availability Zone fails, the Auto Scaling group can keep serving traffic from healthy AZs and launch replacement instances there. Combined with a load balancer, this is a core AWS pattern for high availability and self-healing.',
+  },
+  {
+    topicSlug: 'multi-tier-fault-tolerant-architecture',
+    front: 'Why should shared uploads and static assets be stored outside EC2 instances in a resilient architecture?',
+    back: 'Files stored on a single EC2 instance are lost if that instance fails, is terminated, or traffic shifts to another instance. Storing assets in S3 or shared files in EFS keeps the application tier stateless and fault tolerant.',
+  },
 
   // Topic: disaster-recovery-and-backup
   {
@@ -65,6 +75,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'disaster-recovery-and-backup',
     front: 'What S3 feature helps protect against accidental deletion and supports RPO goals?',
     back: 'S3 Versioning keeps all versions of every object, including deleted ones (via delete markers). Combined with S3 Cross-Region Replication (CRR), it enables recovery from accidental deletion and provides a geographically redundant copy for DR.',
+  },
+  {
+    topicSlug: 'disaster-recovery-and-backup',
+    front: 'When should you choose Warm Standby over Pilot Light for disaster recovery?',
+    back: 'Choose Warm Standby when you need a lower RTO because a scaled-down but fully functional environment is already running in the recovery Region. Pilot Light is cheaper, but more infrastructure must be launched during failover, so recovery takes longer.',
+  },
+  {
+    topicSlug: 'disaster-recovery-and-backup',
+    front: 'How do cross-Region read replicas support disaster recovery for relational databases?',
+    back: 'A cross-Region read replica keeps an asynchronously replicated copy of the database in another Region. In a regional disaster, you can promote the replica to become the new primary. This improves RPO and recovery speed, but replication lag means some recent writes can still be lost.',
   },
 
   // Topic: event-driven-and-messaging
@@ -93,6 +113,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is an SQS Dead Letter Queue (DLQ) and when is it triggered?',
     back: 'A DLQ receives messages that fail processing after a configurable number of receive attempts (maxReceiveCount). It prevents poison-pill messages from blocking the main queue. You can inspect DLQ messages for debugging and replay them after fixing the processing bug.',
   },
+  {
+    topicSlug: 'event-driven-and-messaging',
+    front: 'What is SQS long polling and why is it recommended?',
+    back: 'Long polling lets SQS wait for messages to arrive before returning a response instead of immediately returning empty results. It reduces the number of empty API calls, lowers cost, and improves efficiency compared with short polling.',
+  },
+  {
+    topicSlug: 'event-driven-and-messaging',
+    front: 'What do MessageGroupId and MessageDeduplicationId do in an SQS FIFO queue?',
+    back: 'MessageGroupId preserves ordering within a group of related messages. MessageDeduplicationId prevents duplicate messages from being processed within the deduplication window. Together they provide ordered, exactly-once processing behavior for FIFO use cases.',
+  },
 
   // Topic: edge-and-global-routing
   {
@@ -114,6 +144,21 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'edge-and-global-routing',
     front: 'What is a CloudFront Origin Access Control (OAC) and why is it used?',
     back: 'OAC is an identity that allows CloudFront to access a private S3 bucket on behalf of users. It replaces the older Origin Access Identity (OAI). By granting the OAC permission on the S3 bucket policy and blocking direct public access, you ensure users can only reach S3 content through CloudFront.',
+  },
+  {
+    topicSlug: 'edge-and-global-routing',
+    front: 'How do Route 53 health checks work with failover routing?',
+    back: 'Route 53 health checks monitor the primary endpoint. If it becomes unhealthy, failover routing automatically returns the secondary record instead. This is a common SAA-C03 pattern for active-passive disaster recovery, especially with public endpoints across regions.',
+  },
+  {
+    topicSlug: 'edge-and-global-routing',
+    front: 'What is the difference between a Route 53 Alias record and a CNAME record?',
+    back: 'An Alias record is an AWS-specific record type that can point to AWS resources such as ALB, CloudFront, or S3 website endpoints and can be used at the zone apex. A CNAME cannot be used at the root domain and points only to another domain name. Alias queries to AWS targets are free.',
+  },
+  {
+    topicSlug: 'edge-and-global-routing',
+    front: 'When should you use CloudFront signed URLs or signed cookies?',
+    back: 'Use signed URLs or signed cookies when you need to restrict access to private content distributed through CloudFront. Signed URLs are best for individual files; signed cookies are better when a user needs access to multiple protected files without generating a separate URL for each one.',
   },
 
   // ─── Domain 2: Design High-Performing Architectures ───────────────────────
@@ -144,6 +189,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What metric does Auto Scaling use out-of-the-box to scale based on SQS queue depth?',
     back: 'There is no native target tracking integration, but you can scale on the custom metric ApproximateNumberOfMessagesVisible (from CloudWatch for SQS). Divide by the number of current instances to get "backlog per instance" and set a target for that value. This is a common pattern for queue-based worker fleets.',
   },
+  {
+    topicSlug: 'compute-selection-and-scaling',
+    front: 'What is the difference between Lambda Reserved Concurrency and Provisioned Concurrency?',
+    back: 'Reserved Concurrency sets aside a maximum and guaranteed portion of account concurrency for a function. Provisioned Concurrency keeps function environments pre-initialized to reduce cold starts. Reserved Concurrency controls capacity limits; Provisioned Concurrency improves startup latency.',
+  },
+  {
+    topicSlug: 'compute-selection-and-scaling',
+    front: 'When is horizontal scaling preferred over vertical scaling?',
+    back: 'Horizontal scaling is preferred when you want higher availability, better fault tolerance, and elasticity by adding more instances behind a load balancer. Vertical scaling increases the size of one server, but it has limits and creates a larger single point of failure.',
+  },
 
   // Topic: storage-performance-patterns
   {
@@ -171,6 +226,31 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is an S3 multipart upload and when is it required?',
     back: 'Multipart upload breaks a large object into parts uploaded in parallel, then assembled in S3. Required for objects ≥ 5 GB. Recommended above 100 MB for better throughput and the ability to retry failed parts without restarting the entire upload.',
   },
+    {
+      topicSlug: 'storage-performance-patterns',
+      front: 'What is the difference between Amazon FSx for Windows File Server and Amazon EFS?',
+      back: 'FSx for Windows File Server provides a managed SMB file system for Windows workloads and can integrate with Active Directory, NTFS permissions, and DFS. EFS provides a managed NFS file system for Linux-based workloads and shared POSIX access. Use FSx for Windows apps; use EFS for Linux fleets and containers.',
+    },
+    {
+      topicSlug: 'storage-performance-patterns',
+      front: 'How do EBS snapshots store data and why are repeated snapshots cheaper?',
+      back: 'EBS snapshots are incremental and stored in S3. The first snapshot copies all blocks on the volume, but later snapshots save only changed blocks since the previous snapshot. That reduces storage consumed and speeds up recurring backups.',
+    },
+    {
+      topicSlug: 'storage-performance-patterns',
+      front: 'What is EBS Multi-Attach and when should you use it?',
+      back: 'EBS Multi-Attach allows a single io1 or io2 volume to be attached to multiple EC2 instances in the same Availability Zone at the same time. It is for cluster-aware applications that coordinate shared block storage. It is not a replacement for a shared file system like EFS.',
+    },
+    {
+      topicSlug: 'storage-performance-patterns',
+      front: 'What does S3 strong read-after-write consistency mean?',
+      back: 'After a successful PUT, overwrite, or DELETE, any subsequent read or list request immediately returns the latest version of the object. You no longer need to design around eventual consistency for standard S3 object operations.',
+    },
+    {
+      topicSlug: 'storage-performance-patterns',
+      front: 'What is the difference between EFS General Purpose and Max I/O performance modes?',
+      back: 'General Purpose delivers lower latency for most applications and is the default choice. Max I/O supports higher levels of aggregate throughput and parallelism for large-scale workloads, but with higher latency. Choose General Purpose unless you specifically need very high distributed throughput.',
+    },
 
   // Topic: database-performance-and-caching
   {
@@ -198,6 +278,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is a cache-aside (lazy loading) pattern and how does it work with ElastiCache?',
     back: '1. Application checks cache for data.\n2. Cache hit: return data immediately.\n3. Cache miss: fetch from database, write result to cache, return data.\nData is only loaded into cache when needed. Downside: first request after cache expiry has higher latency (cold miss). Compare with write-through: cache is updated on every write.',
   },
+  {
+    topicSlug: 'database-performance-and-caching',
+    front: 'What is Amazon RDS Proxy and what problem does it solve?',
+    back: 'RDS Proxy is a managed database proxy that pools and shares database connections for applications such as Lambda. It reduces connection storms, improves scalability, and helps applications fail over faster to a new database instance.',
+  },
+  {
+    topicSlug: 'database-performance-and-caching',
+    front: 'What is the difference between DynamoDB on-demand and provisioned capacity modes?',
+    back: 'On-demand capacity automatically scales based on traffic and is best for unpredictable workloads. Provisioned capacity requires you to set read and write capacity ahead of time and is more cost-effective for predictable steady traffic, especially with auto scaling.',
+  },
 
   // Topic: network-performance-and-hybrid
   {
@@ -219,6 +309,36 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'network-performance-and-hybrid',
     front: 'What is Placement Group and when is each type used?',
     back: 'Cluster: packs instances close together in a single AZ for the lowest network latency and highest bandwidth (HPC, big data). Single point of failure.\nSpread: distributes instances across distinct hardware (max 7 per AZ); reduces simultaneous hardware failure risk.\nPartition: divides instances into logical partitions on separate hardware (HDFS, Kafka, Cassandra).',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'What is the difference between VPC Peering and Transit Gateway?',
+    back: 'VPC Peering creates a direct one-to-one connection between two VPCs, but it is not transitive and does not scale well across many VPCs. Transit Gateway is a central hub that supports transitive routing between many VPCs and on-premises networks. Peering is fine for a small number of VPCs; TGW is better for larger hub-and-spoke topologies.',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'What is a NAT Gateway and what are its main cost and security tradeoffs?',
+    back: 'A NAT Gateway lets instances in private subnets initiate outbound internet access without allowing inbound internet connections. It improves security by keeping private instances non-addressable from the internet, but it adds hourly charges plus per-GB data processing charges. Use VPC Endpoints for S3 and DynamoDB to avoid unnecessary NAT data transfer costs.',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'What are Route 53 Resolver inbound and outbound endpoints used for?',
+    back: 'Inbound endpoints let on-premises DNS resolvers forward queries into Route 53 Resolver so they can resolve private AWS names. Outbound endpoints let Route 53 Resolver forward queries from AWS to on-premises DNS servers. They are used in hybrid DNS architectures where workloads need private name resolution across environments.',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'What is Accelerated Site-to-Site VPN and when is it useful?',
+    back: 'Accelerated Site-to-Site VPN uses the AWS global network to improve the path between a remote site and AWS, often reducing latency and jitter compared with standard internet-based VPN routing. Use it when you need quicker VPN setup than Direct Connect but want more consistent performance for long-distance hybrid connectivity.',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'Why is Direct Connect often paired with a Site-to-Site VPN?',
+    back: 'Direct Connect provides consistent private connectivity, but it is common to pair it with a VPN for backup. If the Direct Connect link fails, the VPN can maintain connectivity over the internet. This is a classic hybrid resilience pattern on the SAA exam.',
+  },
+  {
+    topicSlug: 'network-performance-and-hybrid',
+    front: 'Why can overlapping CIDR ranges prevent VPC peering?',
+    back: 'VPC peering does not support overlapping IP address ranges because routing would be ambiguous. If two VPCs overlap, use alternatives such as AWS PrivateLink, Transit Gateway with redesign, or NAT-based patterns instead of direct peering.',
   },
 
   // ─── Domain 3: Design Secure Applications and Architectures ───────────────
@@ -249,6 +369,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is AWS IAM Identity Center (formerly SSO) and when is it used?',
     back: 'IAM Identity Center provides centralised workforce single sign-on across multiple AWS accounts and applications. Users authenticate with a corporate identity provider (Okta, Azure AD) or the built-in directory. Recommended for multi-account environments to avoid managing individual IAM users per account.',
   },
+  {
+    topicSlug: 'identity-access-and-governance',
+    front: 'What is the difference between a trust policy and a permissions policy on an IAM role?',
+    back: 'A trust policy defines who is allowed to assume the role. A permissions policy defines what the role is allowed to do after it is assumed. Think of trust policy as "who can get in" and permissions policy as "what they can do inside."',
+  },
+  {
+    topicSlug: 'identity-access-and-governance',
+    front: 'What does AWS STS AssumeRole provide and why is it preferred for applications?',
+    back: 'STS AssumeRole issues temporary credentials instead of long-term access keys. This reduces the risk of credential leakage, supports automatic expiration, and is the preferred way for applications and cross-account access to obtain AWS permissions.',
+  },
 
   // Topic: data-protection-and-key-management
   {
@@ -270,6 +400,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'data-protection-and-key-management',
     front: 'What is S3 Object Lock and when is it used?',
     back: 'S3 Object Lock prevents object deletion or overwrite for a fixed or indefinite period (WORM — Write Once Read Many). Used for regulatory compliance (SEC, FINRA), legal holds, and ransomware protection. Two modes: Governance (specific IAM users can override) and Compliance (no one can delete, including root).',
+  },
+  {
+    topicSlug: 'data-protection-and-key-management',
+    front: 'What is envelope encryption in AWS KMS?',
+    back: 'Envelope encryption means the actual data is encrypted with a data key, and that data key is then encrypted with a KMS key. This combines strong security with better performance because large amounts of data do not have to be encrypted directly by KMS.',
+  },
+  {
+    topicSlug: 'data-protection-and-key-management',
+    front: 'When would you use AWS CloudHSM instead of AWS KMS?',
+    back: 'Use CloudHSM when you need dedicated hardware security modules under your control, custom key management, or compliance requirements that KMS cannot satisfy. KMS is easier and preferred for most workloads; CloudHSM is for stricter security or regulatory needs.',
   },
 
   // Topic: network-security-controls
@@ -298,6 +438,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is AWS PrivateLink and what problem does it solve?',
     back: 'PrivateLink allows you to expose a service in your VPC to other VPCs (or AWS customers) without VPC peering or internet traversal. Traffic stays on the AWS network. Enables services to be accessed via Interface Endpoints. Solves CIDR overlap issues that prevent VPC peering.',
   },
+  {
+    topicSlug: 'network-security-controls',
+    front: 'What is AWS Network Firewall and when should you use it?',
+    back: 'AWS Network Firewall is a managed stateful firewall service for inspecting and filtering traffic at the VPC level. Use it when you need centralized layer 3 to layer 7 traffic inspection, domain filtering, or intrusion prevention rules across subnets and VPCs.',
+  },
+  {
+    topicSlug: 'network-security-controls',
+    front: 'Why do Network ACLs often require ephemeral port rules?',
+    back: 'Because Network ACLs are stateless, you must explicitly allow both the inbound request and the outbound response traffic. That means return traffic often needs ephemeral port ranges opened, or otherwise connections will fail even if the primary service port is allowed.',
+  },
 
   // Topic: monitoring-detection-and-response
   {
@@ -325,6 +475,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is VPC Flow Logs and what do they NOT capture?',
     back: 'Flow Logs capture accepted/rejected IP traffic metadata at the ENI, subnet, or VPC level. They do NOT capture: DNS traffic to the Route 53 resolver, Windows activation traffic, traffic to 169.254.169.254 (instance metadata), DHCP traffic, and mirrored traffic. Flow Logs are stored in CloudWatch Logs or S3.',
   },
+  {
+    topicSlug: 'monitoring-detection-and-response',
+    front: 'What is AWS Config and how does it differ from CloudTrail?',
+    back: 'AWS Config records resource configuration states and tracks how they change over time, helping with compliance and drift detection. CloudTrail records API activity. Config answers "what changed in the resource configuration" while CloudTrail answers "who made the API call."',
+  },
+  {
+    topicSlug: 'monitoring-detection-and-response',
+    front: 'What does Amazon Inspector assess?',
+    back: 'Amazon Inspector continuously scans supported workloads such as EC2 instances, container images, and Lambda functions for software vulnerabilities and unintended network exposure. It helps identify patching and exposure issues before they become incidents.',
+  },
 
   // ─── Domain 4: Design Cost-Optimized Architectures ────────────────────────
 
@@ -343,6 +503,21 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'cost-aware-architecture-decisions',
     front: 'What are S3 Intelligent-Tiering costs and when does it make sense?',
     back: 'S3 Intelligent-Tiering automatically moves objects between Frequent, Infrequent, and Archive tiers based on access patterns at a small monitoring cost per object. It makes sense when access patterns are unknown or variable. For data you know is always hot, Standard is cheaper; for data you know is always cold, Glacier is cheaper.',
+  },
+  {
+    topicSlug: 'cost-aware-architecture-decisions',
+    front: 'When should you choose Reserved Instances or Savings Plans over On-Demand pricing?',
+    back: 'Choose Reserved Instances or Savings Plans for steady-state workloads that run continuously or predictably over 1 or 3 years. They trade commitment for lower cost. Use On-Demand when workloads are short-lived, unpredictable, or likely to change significantly.',
+  },
+  {
+    topicSlug: 'cost-aware-architecture-decisions',
+    front: 'When is Single-AZ deployment cheaper but less appropriate than Multi-AZ?',
+    back: 'Single-AZ is cheaper because you pay for fewer redundant resources, but it is less resilient. Use it for non-critical dev, test, or workloads that can tolerate downtime. For production systems that require high availability, Multi-AZ is usually the right architecture despite higher cost.',
+  },
+  {
+    topicSlug: 'cost-aware-architecture-decisions',
+    front: 'When is S3 One Zone-IA cheaper than Standard-IA and what is the tradeoff?',
+    back: 'S3 One Zone-IA is cheaper for infrequently accessed data that can be recreated if an Availability Zone is lost. The tradeoff is lower resilience because objects are stored in only one AZ. Use Standard-IA when you still need multi-AZ durability.',
   },
 
   // Topic: compute-cost-optimization
@@ -366,6 +541,16 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is the Lambda pricing model?',
     back: 'Lambda charges based on: number of invocations (first 1M free per month) + duration in GB-seconds (memory allocated × time in seconds, billed in 1-ms increments). No charges when idle. Additional costs for Provisioned Concurrency, storage beyond 512 MB, and data transfer.',
   },
+  {
+    topicSlug: 'compute-cost-optimization',
+    front: 'Why do AWS Graviton instances often improve cost optimization?',
+    back: 'Graviton instances use AWS-designed ARM-based processors and often deliver better price-performance than comparable x86 instances. They are a common exam answer when the requirement is to reduce compute cost without sacrificing performance for supported workloads.',
+  },
+  {
+    topicSlug: 'compute-cost-optimization',
+    front: 'How can scheduling non-production resources reduce AWS costs?',
+    back: 'Development and test resources often do not need to run 24/7. Automatically stopping EC2 instances or scaling down environments outside business hours can significantly reduce compute spend without changing the architecture.',
+  },
 
   // Topic: storage-and-data-transfer-optimization
   {
@@ -388,6 +573,36 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     front: 'What is AWS Snow Family and when is it used for data transfer?',
     back: 'AWS Snowball Edge / Snowcone / Snowmobile are physical devices for offline data transfer when the internet is too slow, costly, or unavailable.\nRule of thumb: If transferring over the internet would take more than a week, Snow Family is worth considering.\nSnowball Edge: up to 80 TB, edge compute.\nSnowmobile: up to 100 PB, a literal truck.',
   },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'What is AWS DataSync and when should you use it?',
+    back: 'AWS DataSync is an online data transfer service for moving large amounts of data between on-premises storage and AWS services such as S3, EFS, and FSx. It handles parallel transfer, encryption, scheduling, and integrity checks. Use it when you need recurring or one-time bulk transfers over the network without building custom copy tooling.',
+  },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'What is AWS Transfer Family and which protocols does it support?',
+    back: 'AWS Transfer Family is a managed file transfer service that gives users access to S3 or EFS over traditional file transfer protocols. It supports SFTP, FTPS, FTP, and AS2. Use it when business partners or legacy systems need standard file transfer interfaces instead of direct AWS APIs.',
+  },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'What is AWS Storage Gateway and what are its main deployment modes?',
+    back: 'Storage Gateway connects on-premises environments to AWS storage. File Gateway exposes NFS or SMB shares backed by S3. Volume Gateway exposes iSCSI block volumes for cached or stored hybrid storage. Tape Gateway presents virtual tapes for backup applications and stores them in AWS. It is used when you need local access patterns with AWS-backed storage.',
+  },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'When is CloudFront often more cost-effective than serving downloads directly from S3?',
+    back: 'CloudFront is often cheaper for high-volume public content delivery because cached responses reduce repeated origin fetches and CDN data transfer pricing is often better than direct S3 internet egress. It also improves latency for global users and offloads traffic from the bucket origin.',
+  },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'Why do minimum storage duration charges matter for some S3 storage classes?',
+    back: 'Classes such as Standard-IA, One Zone-IA, Glacier Instant Retrieval, Glacier Flexible Retrieval, and Deep Archive have minimum storage duration charges. If you delete or move objects too soon, you still pay as if they were stored for the minimum period, which can erase expected savings.',
+  },
+  {
+    topicSlug: 'storage-and-data-transfer-optimization',
+    front: 'What extra costs should you expect with S3 Cross-Region Replication?',
+    back: 'Cross-Region Replication adds charges for storage of the replicated objects, inter-Region data transfer, and replication requests. It improves durability and disaster recovery, but it is not a free copy mechanism.',
+  },
 
   // Topic: cost-visibility-and-governance
   {
@@ -409,6 +624,21 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'cost-visibility-and-governance',
     front: 'What is AWS Organizations and how does it help with cost management?',
     back: 'AWS Organizations groups multiple AWS accounts under a single management account. For cost management: consolidated billing (one invoice for all accounts), volume pricing discounts apply across accounts, reserved instance and Savings Plans sharing across accounts. SCPs enforce guardrails that prevent costly resource creation.',
+  },
+  {
+    topicSlug: 'cost-visibility-and-governance',
+    front: 'What does AWS Trusted Advisor provide for cost optimisation?',
+    back: 'Trusted Advisor analyses your AWS environment and highlights cost-saving opportunities such as idle load balancers, underutilised EC2 instances, unattached EBS volumes, and low-utilisation reserved resources. It is useful for quickly finding waste across an account without manually reviewing every service.',
+  },
+  {
+    topicSlug: 'cost-visibility-and-governance',
+    front: 'What is the AWS Cost and Usage Report (CUR) and when is it used?',
+    back: 'The Cost and Usage Report is the most detailed AWS billing dataset. It delivers granular usage and cost records to S3 for analysis in tools such as Athena, Redshift, or QuickSight. Use it when Cost Explorer is too high-level and you need chargeback or deep financial analysis.',
+  },
+  {
+    topicSlug: 'cost-visibility-and-governance',
+    front: 'What is the difference between AWS Budgets and Cost Explorer?',
+    back: 'AWS Budgets is for alerting when actual or forecasted spend crosses a threshold. Cost Explorer is for visual analysis of historical and forecasted spend trends. Budgets tells you when to react; Cost Explorer helps you understand why costs changed.',
   },
   // ─── Domain 1: Design Resilient Architectures ─────────────────────────────
 
@@ -627,5 +857,15 @@ export const SAA_FLASHCARDS: SeedFlashcard[] = [
     topicSlug: 'machine-learning-and-ai-services',
     front: 'What is a SageMaker Endpoint and what are the two main types?',
     back: 'A SageMaker Endpoint hosts a deployed ML model and provides an HTTPS API for inference.\nReal-time Endpoint: persistent, low-latency endpoint for synchronous predictions. Scales with auto scaling. Best for interactive applications.\nBatch Transform: processes large datasets offline (no persistent endpoint). Runs predictions on S3 input and writes results to S3. Best for bulk scoring jobs where real-time response is not required.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    front: 'What is Amazon Lex and what problem does it solve?',
+    back: 'Amazon Lex is a managed conversational AI service for building chatbots and voice bots using the same underlying technology as Alexa. It is used when an application needs natural language chat or voice interactions without building custom NLP pipelines.',
+  },
+  {
+    topicSlug: 'machine-learning-and-ai-services',
+    front: 'What is Amazon Translate and when should you use it?',
+    back: 'Amazon Translate is a managed neural machine translation service that converts text between languages. Use it when applications need multilingual content delivery, localization, or real-time text translation without training custom language models.',
   },
 ];
